@@ -1,0 +1,1853 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta Recepciones LIRIS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7f9 0%, #e3e8ef 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #2c3e50;
+            position: relative;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Botones flotantes en las esquinas */
+        .floating-buttons {
+            position: fixed;
+            top: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .floating-button {
+            pointer-events: auto;
+            background: linear-gradient(135deg, #1a970a, #09a811);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 15px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 8px rgba(26, 151, 10, 0.2);
+            text-decoration: none;
+        }
+
+        .floating-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 12px rgba(26, 151, 10, 0.3);
+        }
+
+        .floating-button.left {
+            position: absolute;
+            left: 20px;
+        }
+
+        .floating-button.right {
+            position: absolute;
+            right: 20px;
+        }
+
+        .floating-button.right {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+        }
+
+        .floating-button.right:hover {
+            box-shadow: 0 5px 12px rgba(52, 152, 219, 0.3);
+        }
+
+        /* NUEVOS BOTONES FLOTANTES VERTICALES CON TEXTO */
+        .floating-actions {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            z-index: 1000;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            display: none;
+        }
+
+        .action-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .action-button {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+            font-size: 22px;
+            color: white;
+            margin-bottom: 5px;
+        }
+
+        .action-button:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .action-button.primary {
+            background: linear-gradient(135deg, #27ae60, #229954);
+        }
+
+        .action-button.secondary {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+        }
+
+        .action-button.tertiary {
+            background: linear-gradient(135deg, #7f8c8d, #95a5a6);
+        }
+
+        .action-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-align: center;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin-top: 2px;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            min-width: 70px;
+            letter-spacing: 0.3px;
+        }
+
+        .action-label.primary {
+            background-color: #27ae60;
+        }
+
+        .action-label.secondary {
+            background-color: #f39c12;
+        }
+
+        .action-label.tertiary {
+            background-color: #7f8c8d;
+        }
+
+        .action-button .tooltip {
+            position: absolute;
+            right: 75px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .action-button .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -5px;
+            transform: translateY(-50%);
+            border-width: 5px;
+            border-style: solid;
+            border-color: transparent transparent transparent rgba(0, 0, 0, 0.85);
+        }
+
+        .action-button:hover .tooltip {
+            opacity: 1;
+            visibility: visible;
+            right: 80px;
+        }
+
+        /* INDICADOR DE ENVÍO SFTP */
+        .sftp-indicator {
+            position: fixed;
+            top: 80px;
+            right: 30px;
+            z-index: 1000;
+            padding: 12px 20px;
+            border-radius: 10px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            animation: slideInRight 0.5s ease;
+            max-width: 400px;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .sftp-indicator.success {
+            background: linear-gradient(135deg, #e8f6ef, #d5f0e1);
+            color: #27ae60;
+            border-left: 4px solid #27ae60;
+        }
+
+        .sftp-indicator.error {
+            background: linear-gradient(135deg, #ffecec, #ffdcdc);
+            color: #e74c3c;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .sftp-indicator.warning {
+            background: linear-gradient(135deg, #fff8e1, #fff3cd);
+            color: #f39c12;
+            border-left: 4px solid #f39c12;
+        }
+
+        .sftp-indicator.info {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+        }
+
+        .sftp-indicator .close-btn {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 16px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+            margin-left: auto;
+        }
+
+        .sftp-indicator .close-btn:hover {
+            opacity: 1;
+        }
+
+        /* Header */
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #1a970a;
+            flex-wrap: wrap;
+            gap: 20px;
+            position: relative;
+            overflow: hidden;
+            margin-top: 50px;
+        }
+
+        .header-top::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #1a970a, #09a811);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            height: 50px;
+            object-fit: contain;
+            flex-shrink: 0;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+        }
+
+        .title-section {
+            flex: 1;
+            min-width: 300px;
+            text-align: center;
+        }
+
+        .title {
+            font-size: 2.2rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+            animation: subtleGlow 3s ease-in-out infinite alternate;
+            background: linear-gradient(135deg, #1a970a, #2c3e50);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 5px;
+        }
+
+        @keyframes subtleGlow {
+            0% {
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+                transform: translateY(0);
+            }
+            100% {
+                text-shadow: 2px 2px 8px rgba(26, 151, 10, 0.3);
+                transform: translateY(-2px);
+            }
+        }
+
+        .title::after {
+            content: '';
+            display: block;
+            width: 80px;
+            height: 4px;
+            background: linear-gradient(90deg, #1a970a, #09a811);
+            margin: 10px auto 0;
+            border-radius: 2px;
+            animation: lineGrow 1.5s ease-out;
+        }
+
+        @keyframes lineGrow {
+            from {
+                width: 0;
+                opacity: 0;
+            }
+            to {
+                width: 80px;
+                opacity: 1;
+            }
+        }
+
+        .subtitle {
+            font-size: 0.95rem;
+            color: #7f8c8d;
+            font-weight: 500;
+            margin-top: 5px;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: flex-end;
+            flex: 0 1 auto;
+            min-width: 300px;
+        }
+
+        .search-input {
+            padding: 12px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            width: 300px;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #1a970a;
+            box-shadow: 0 0 0 3px rgba(26, 151, 10, 0.1);
+            background: white;
+        }
+
+        .search-btn {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #1a970a, #09a811);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(26, 151, 10, 0.2);
+        }
+
+        .search-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(26, 151, 10, 0.3);
+        }
+
+        .search-btn:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .search-btn.loading {
+            position: relative;
+            padding-right: 40px;
+        }
+
+        .search-btn.loading::after {
+            content: '';
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: translateY(-50%) rotate(360deg); }
+        }
+
+        /* Mensajes */
+        .message-container {
+            margin-bottom: 20px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+        }
+
+        .message {
+            padding: 12px 20px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            display: none;
+            width: 100%;
+            border-left: 4px solid;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .message.visible {
+            display: flex;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.error {
+            background-color: #ffecec;
+            color: #e74c3c;
+            border-left-color: #e74c3c;
+        }
+
+        .message.warning {
+            background-color: #fff8e1;
+            color: #f39c12;
+            border-left-color: #f39c12;
+        }
+
+        .message.success {
+            background-color: #e8f6ef;
+            color: #27ae60;
+            border-left-color: #27ae60;
+        }
+
+        .message.info {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            border-left-color: #1976d2;
+        }
+
+        /* Estadísticas */
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            border-top: 4px solid #1a970a;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #1a970a, #09a811);
+        }
+
+        .stat-label {
+            font-weight: 600;
+            color: #7f8c8d;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            color: #2c3e50;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* Información de la Recepción */
+        .asn-header {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .asn-info {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            transition: transform 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            border-top: 4px solid #3498db;
+        }
+
+        .asn-info:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #7f8c8d;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .info-value {
+            font-size: 16px;
+            color: #2c3e50;
+            font-weight: 600;
+            word-break: break-all;
+        }
+
+        .info-value.receiptkey {
+            font-family: monospace;
+            font-size: 18px;
+            font-weight: 800;
+            color: #1a970a;
+            letter-spacing: 1px;
+        }
+
+        /* Tabla de detalles */
+        .detalle-table-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            margin-top: 30px;
+            position: relative;
+        }
+
+        .detalle-table-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #1a970a, #09a811);
+        }
+
+        .detalle-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1200px;
+        }
+
+        .detalle-table thead {
+            background: linear-gradient(135deg, #1a970a 0%, #09a811 100%);
+        }
+
+        .detalle-table th {
+            color: white;
+            padding: 16px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+        }
+
+        .detalle-table th:last-child {
+            border-right: none;
+        }
+
+        .detalle-table th::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: rgba(255,255,255,0.3);
+        }
+
+        .detalle-table td {
+            padding: 14px 12px;
+            border-bottom: 1px solid #f1f3f5;
+            color: #495057;
+            vertical-align: middle;
+            transition: background-color 0.2s ease;
+        }
+
+        .detalle-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .detalle-table tr.con-problemas {
+            background-color: #ffecec !important;
+            border-left: 3px solid #e74c3c;
+        }
+
+        .detalle-table tr.con-problemas:hover {
+            background-color: #ffcdd2 !important;
+        }
+
+        .detalle-table tr.con-problemas td {
+            color: #c0392b;
+            font-weight: 600;
+        }
+
+        .detalle-table tr.con-problemas .qty {
+            background-color: #ffebee;
+            color: #e74c3c;
+        }
+
+        .detalle-table tr.con-problemas .vencimiento {
+            background-color: #ffebee;
+            color: #e74c3c;
+            border-left: 3px solid #e74c3c;
+            font-weight: bold;
+        }
+
+        .detalle-table tr:hover {
+            background-color: #e8f6ef;
+        }
+
+        .receiptlinenumber {
+            text-align: center;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 15px;
+            color: #2c3e50;
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 6px;
+        }
+
+        .sku {
+            font-family: monospace;
+            font-weight: bold;
+            color: #1a970a;
+            font-size: 15px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .receiptkey {
+            font-family: monospace;
+            color: #3498db;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .externlineno {
+            text-align: center;
+            font-family: monospace;
+            font-size: 14px;
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 6px;
+        }
+
+        .qty {
+            text-align: center;
+            font-weight: bold;
+            font-size: 16px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: #f8f9fa;
+        }
+
+        .qty.diferencia {
+            background-color: #ffebee;
+            color: #e74c3c;
+            position: relative;
+        }
+
+        .qty.diferencia::after {
+            content: '⚠';
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            color: #e74c3c;
+        }
+
+        .vencimiento {
+            font-family: monospace;
+            font-weight: 600;
+            font-size: 14px;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+
+        .vencimiento.con-fecha {
+            color: #27ae60;
+            background: #e8f6ef;
+            border-left: 3px solid #27ae60;
+        }
+
+        .vencimiento.sin-fecha {
+            color: #e74c3c;
+            background: #ffebee;
+            border-left: 3px solid #e74c3c;
+            font-weight: bold;
+        }
+
+        .actualreceiptdate {
+            font-size: 13px;
+            color: #7f8c8d;
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 6px;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #95a5a6;
+            font-size: 16px;
+        }
+
+        .no-data i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            color: #ced4da;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 14px;
+            border-top: 1px solid #e9ecef;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Sección de resultados */
+        .result-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            margin-bottom: 25px;
+            display: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .result-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #1a970a, #09a811);
+        }
+
+        .section-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title i {
+            color: #1a970a;
+            font-size: 24px;
+        }
+
+        @media (max-width: 1200px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .header-top {
+                padding: 15px;
+                margin-top: 60px;
+            }
+            
+            .title {
+                font-size: 1.8rem;
+            }
+            
+            .search-bar {
+                min-width: 100%;
+                order: 3;
+                margin-top: 15px;
+            }
+            
+            .search-input {
+                width: 100%;
+            }
+            
+            .sftp-indicator {
+                top: 100px;
+                right: 15px;
+                max-width: 300px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .floating-buttons {
+                padding: 0 10px;
+                top: 10px;
+            }
+            
+            .floating-button {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+            
+            .floating-actions {
+                bottom: 20px;
+                right: 20px;
+                gap: 15px;
+            }
+            
+            .action-button {
+                width: 55px;
+                height: 55px;
+                font-size: 20px;
+            }
+            
+            .action-label {
+                font-size: 10px;
+                min-width: 60px;
+            }
+            
+            .action-button .tooltip {
+                display: none;
+            }
+            
+            .sftp-indicator {
+                top: 120px;
+                right: 10px;
+                left: 10px;
+                max-width: none;
+            }
+            
+            .header-top {
+                flex-direction: column;
+                text-align: center;
+                gap: 15px;
+                margin-top: 70px;
+            }
+            
+            .logo-container {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .title {
+                font-size: 1.6rem;
+            }
+            
+            .asn-header,
+            .stats-cards {
+                grid-template-columns: 1fr;
+            }
+            
+            .detalle-table {
+                font-size: 13px;
+                min-width: 1000px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .title {
+                font-size: 1.4rem;
+            }
+            
+            .subtitle {
+                font-size: 0.85rem;
+            }
+            
+            .stat-value {
+                font-size: 24px;
+            }
+            
+            .section-title {
+                font-size: 1.5rem;
+            }
+            
+            .floating-button {
+                padding: 5px 10px;
+                font-size: 11px;
+            }
+            
+            .floating-button span {
+                display: none;
+            }
+            
+            .floating-button i {
+                margin-right: 0;
+            }
+            
+            .floating-actions {
+                bottom: 15px;
+                right: 15px;
+                gap: 12px;
+            }
+            
+            .action-button {
+                width: 50px;
+                height: 50px;
+                font-size: 18px;
+            }
+            
+            .action-label {
+                font-size: 9px;
+                min-width: 55px;
+            }
+            
+            .sftp-indicator {
+                padding: 10px 15px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Botones flotantes en las esquinas -->
+    <div class="floating-buttons">
+
+        
+        <button class="floating-button right" onclick="irADespachos()">
+            <i class="fas fa-shipping-fast"></i>
+            <span>Despachos / Ordenes de Expedición</span>
+        </button>
+    </div>
+
+    <!-- INDICADOR DE ENVÍO SFTP -->
+    <div class="sftp-indicator" id="sftpIndicator">
+        <i id="sftpIcon"></i>
+        <span id="sftpMessage"></span>
+        <button class="close-btn" onclick="cerrarIndicadorSFTP()">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <!-- NUEVOS BOTONES FLOTANTES VERTICALES CON TEXTO -->
+    <div class="floating-actions" id="floatingActions">
+        <!-- Botón 1: Enviar a Interfaz (solo visible si status = 15) -->
+        <div class="action-item" id="actionEnviarInterfaz" style="display: none;">
+            <button class="action-button primary" onclick="enviarDatosInterfaz()">
+                <i class="fas fa-paper-plane"></i>
+                <div class="tooltip">Enviar datos a Interfaz SFTP</div>
+            </button>
+            <div class="action-label primary">Enviar SFTP</div>
+        </div>
+        
+        <!-- Botón 2: Descargar Excel -->
+        <div class="action-item">
+            <button class="action-button secondary" onclick="descargarExcel()">
+                <i class="fas fa-file-excel"></i>
+                <div class="tooltip">Descargar Excel (CSV)</div>
+            </button>
+            <div class="action-label secondary">Descargar Excel</div>
+        </div>
+        
+        <!-- Botón 3: Descargar TXT -->
+        <div class="action-item">
+            <button class="action-button tertiary" onclick="descargarTXT()">
+                <i class="fas fa-file-alt"></i>
+                <div class="tooltip">Descargar TXT formateado</div>
+            </button>
+            <div class="action-label tertiary">Descargar TXT</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Header con logos y búsqueda -->
+        <div class="header-top">
+            <div class="logo-container">
+                <img src="https://tse2.mm.bing.net/th/id/OIP.Ckl7mNDKlUqm6056On3FIwAAAA?w=380&h=125&rs=1&pid=ImgDetMain&o=7&rm=3" 
+                     class="logo" 
+                     alt="Logo Servientrega"
+                     loading="lazy">
+                
+            </div>
+            
+            <div class="title-section">
+                <h1 class="title">Consulta Recepciones LIRIS</h1>
+                <p class="subtitle">Sistema de consulta de Recepciones</p>
+            </div>
+            
+            <div class="search-bar">
+                <input type="text" 
+                       id="numeroRecepcion" 
+                       class="search-input" 
+                       placeholder="🔍 Ingrese número de Recepción"
+                       required>
+                <button id="btnBuscar" class="search-btn">
+                    <i class="fas fa-search"></i> Consultar
+                </button>
+            </div>
+        </div>
+
+        <!-- Mensajes -->
+        <div class="message-container" id="messageContainer"></div>
+
+        <!-- Resultados -->
+        <div class="result-section" id="resultSection">
+            <!-- Tarjetas de totales -->
+            <h2 class="section-title">
+                <i class="fas fa-chart-bar"></i> Resumen de la Recepción
+            </h2>
+            
+            <div class="stats-cards" id="statsCards">
+                <div class="stat-card">
+                    <span class="stat-label">
+                        <i class="fas fa-box"></i> Total Cantidad Esperada
+                    </span>
+                    <span class="stat-value" id="totalEsperado">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">
+                        <i class="fas fa-check-circle"></i> Total Cantidad Recibida
+                    </span>
+                    <span class="stat-value" id="totalRecibido">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">
+                        <i class="fas fa-list"></i> Total Líneas
+                    </span>
+                    <span class="stat-value" id="totalLineas">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">
+                        <i class="fas fa-calendar-alt"></i> Líneas con Fecha Vencimiento
+                    </span>
+                    <span class="stat-value" id="lineasConFecha">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">
+                        <i class="fas fa-exclamation-triangle"></i> Líneas con Observaciones
+                    </span>
+                    <span class="stat-value" id="lineasConProblemas">0</span>
+                </div>
+            </div>
+
+            <!-- Información de la Recepción -->
+            <h2 class="section-title">
+                <i class="fas fa-info-circle"></i> Información de la Recepción
+            </h2>
+            
+            <div class="asn-header" id="asnHeader">
+                <!-- Se llenará dinámicamente -->
+            </div>
+
+            <!-- Detalle de la Recepción -->
+            <h2 class="section-title">
+                <i class="fas fa-table"></i> Detalle de la Recepción
+            </h2>
+            <div class="detalle-table-container">
+                <table class="detalle-table" id="detalleTable">
+                    <thead>
+                        <tr>
+                            <th># Línea</th>
+                            <th>Número Recepción</th>
+                            <th>SKU</th>
+                            <th>Línea Externa</th>
+                            <th>Cantidad Esperada</th>
+                            <th>Cantidad Recibida</th>
+                            <th>Fecha Vencimiento</th>
+                            <th>Fecha Recepción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detalleBody">
+                        <!-- Se llenará dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Sistema de consulta Recepciones LIRIS &copy; 2024</p>
+            <p style="font-size: 12px; margin-top: 5px; color: #95a5a6;">
+                <i class="fas fa-shield-alt"></i> Sistema seguro y confiable | 
+                <i class="fas fa-calendar-alt"></i> Fechas de vencimiento
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let currentRecepcionData = null;
+        let sftpTimeout = null;
+
+        // ========== FUNCIONES DE NAVEGACIÓN ==========
+        function irAOrdenesCompra() {
+            window.location.href = 'recepcion_asn.html';
+        }
+
+        function irADespachos() {
+            window.location.href = 'despachos1.html';
+        }
+
+        // ========== INDICADOR SFTP ==========
+        function mostrarIndicadorSFTP(tipo, mensaje, duracion = 10000) {
+            const indicator = document.getElementById('sftpIndicator');
+            const icon = document.getElementById('sftpIcon');
+            const message = document.getElementById('sftpMessage');
+            
+            if (sftpTimeout) clearTimeout(sftpTimeout);
+            
+            indicator.className = 'sftp-indicator';
+            indicator.classList.add(tipo);
+            
+            switch(tipo) {
+                case 'success':
+                    icon.className = 'fas fa-check-circle';
+                    break;
+                case 'error':
+                    icon.className = 'fas fa-times-circle';
+                    break;
+                case 'warning':
+                    icon.className = 'fas fa-exclamation-triangle';
+                    break;
+                case 'info':
+                    icon.className = 'fas fa-info-circle';
+                    break;
+            }
+            
+            message.textContent = mensaje;
+            indicator.style.display = 'flex';
+            
+            sftpTimeout = setTimeout(() => {
+                cerrarIndicadorSFTP();
+            }, duracion);
+        }
+
+        function cerrarIndicadorSFTP() {
+            const indicator = document.getElementById('sftpIndicator');
+            indicator.style.display = 'none';
+            if (sftpTimeout) {
+                clearTimeout(sftpTimeout);
+                sftpTimeout = null;
+            }
+        }
+
+        // ========== FUNCIONES AUXILIARES ==========
+        function mostrarBotonesFlotantes(status) {
+            const floatingActions = document.getElementById('floatingActions');
+            const actionEnviarInterfaz = document.getElementById('actionEnviarInterfaz');
+            
+            floatingActions.style.display = 'flex';
+            
+            // SOLO mostrar botón SFTP si status es 15
+            if (status === '15') {
+                actionEnviarInterfaz.style.display = 'flex';
+            } else {
+                actionEnviarInterfaz.style.display = 'none';
+            }
+        }
+
+        function ocultarBotonesFlotantes() {
+            document.getElementById('floatingActions').style.display = 'none';
+        }
+
+        function formatoDosDecimales(num) {
+            const numFloat = parseFloat(num) || 0;
+            return numFloat.toFixed(2);
+        }
+
+        function formatearFechaTXT(fechaStr) {
+            if (!fechaStr || fechaStr === 'N/A') return '';
+            
+            try {
+                // Formato DD/MM/YYYY
+                if (fechaStr.includes('/')) {
+                    const [dia, mes, anio] = fechaStr.split('/');
+                    return `${anio}${mes.padStart(2, '0')}${dia.padStart(2, '0')}`;
+                }
+                
+                // Formato YYYY-MM-DD
+                if (fechaStr.includes('-')) {
+                    const [anio, mes, dia] = fechaStr.split('-');
+                    return `${anio}${mes}${dia}`;
+                }
+                
+                return fechaStr;
+            } catch (e) {
+                console.error('Error formateando fecha:', e);
+                return '';
+            }
+        }
+
+        // ========== ENVIAR DATOS A INTERFAZ SFTP ==========
+        async function enviarDatosInterfaz() {
+            if (!currentRecepcionData || !currentRecepcionData.detalle_recepcion) {
+                mostrarIndicadorSFTP('error', '❌ No hay datos para enviar');
+                return;
+            }
+
+            const status = currentRecepcionData.informacion_recepcion.status;
+            const receiptkey = currentRecepcionData.informacion_recepcion.receiptkey || '';
+            const lineasConFecha = currentRecepcionData.detalle_recepcion.filter(d => d.fecha_vencimiento && d.fecha_vencimiento !== 'N/A').length;
+            const totalLineas = currentRecepcionData.detalle_recepcion.length;
+            
+            // SOLO permitir envío si status es 15
+            if (status !== '15') {
+                const estadoTexto = currentRecepcionData.informacion_recepcion.status_texto || `Estado ${status}`;
+                mostrarIndicadorSFTP('warning', `⚠️ Solo se pueden enviar recepciones con estado "Verificado y cerrado" (15). Estado actual: ${estadoTexto}`);
+                return;
+            }
+
+            if (lineasConFecha !== totalLineas) {
+                const confirmar = confirm(`⚠️ ADVERTENCIA: ${totalLineas - lineasConFecha} líneas NO tienen fecha de vencimiento\n\n¿Desea continuar con el envío?`);
+                if (!confirmar) {
+                    mostrarIndicadorSFTP('info', 'Envío cancelado por falta de fecha de vencimiento');
+                    return;
+                }
+            }
+
+            const confirmar = confirm(`¿ENVIAR RECEPCIÓN A SFTP?\n\nRecepción: ${receiptkey}\nEstado: Verificado y cerrado (15)\nLíneas: ${totalLineas}\nCon Fecha Vencimiento: ${lineasConFecha}\n\n¿Continuar?`);
+            
+            if (!confirmar) {
+                mostrarIndicadorSFTP('info', 'Envío cancelado por el usuario');
+                return;
+            }
+
+            try {
+                mostrarIndicadorSFTP('info', '📤 Generando archivo TXT para SFTP...');
+                
+                const btn = document.querySelector('#actionEnviarInterfaz .action-button');
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                
+                const lines = [];
+                const fechaActual = new Date();
+                const fechaFormato = fechaActual.toISOString().slice(0,8).replace(/-/g, '');
+                
+                currentRecepcionData.detalle_recepcion.forEach(detalle => {
+                    const fields = [
+                        receiptkey,
+                        detalle.sku || '',
+                        detalle.sku || '',
+                        detalle.receiptlinenumber || '',
+                        formatoDosDecimales(detalle.qtyexpected),
+                        formatoDosDecimales(detalle.qtyreceived),
+                        formatearFechaTXT(detalle.fecha_vencimiento),
+                        formatearFechaTXT(detalle.actualreceiptdate),
+                        detalle.externlineno || ''
+                    ];
+                    lines.push(fields.join('|]'));
+                });
+                
+                const txtContent = lines.join('\n');
+                const nombreArchivo = `LIRIS_REC_${receiptkey}_${fechaFormato}.txt`;
+                
+                mostrarIndicadorSFTP('info', '🔗 Conectando con servidor SFTP...');
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000);
+                
+                const response = await fetch('enviarsftp.php', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        contenido: txtContent,
+                        nombre_archivo: nombreArchivo,
+                        orden: receiptkey,
+                        lineas: lines.length,
+                        fecha: fechaActual.toISOString(),
+                        tipo: 'recepcion',
+                        usuario: 'sistema_recepciones'
+                    }),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const resultado = await response.json();
+                btn.innerHTML = originalHTML;
+                
+                if (resultado.success) {
+                    const mensajeExito = `✅ ENVÍO SFTP EXITOSO\n\n📁 Archivo: ${resultado.archivo}\n📏 Tamaño: ${resultado.bytes || 0} bytes\n📍 Ruta: ${resultado.ruta || 'SFTP'}`;
+                    mostrarIndicadorSFTP('success', mensajeExito, 15000);
+                    mostrarMensaje('success', `Archivo enviado a SFTP: ${resultado.archivo}`);
+                    
+                    try {
+                        const historial = JSON.parse(localStorage.getItem('sftp_historial_recepcion') || '[]');
+                        historial.unshift({
+                            archivo: nombreArchivo,
+                            fecha: fechaActual.toISOString(),
+                            recepcion: receiptkey,
+                            lineas: lines.length,
+                            bytes: resultado.bytes || 0,
+                            exito: true,
+                            ruta: resultado.ruta,
+                            tipo: 'recepcion_sftp'
+                        });
+                        localStorage.setItem('sftp_historial_recepcion', JSON.stringify(historial.slice(0, 100)));
+                    } catch (e) {
+                        console.log('No se pudo guardar en historial:', e);
+                    }
+                    
+                } else {
+                    const mensajeError = `❌ ERROR DE ENVÍO SFTP\n\n${resultado.error || 'Error desconocido'}`;
+                    mostrarIndicadorSFTP('error', mensajeError, 15000);
+                    mostrarMensaje('error', resultado.error || 'Error al enviar a SFTP');
+                }
+                
+            } catch (error) {
+                console.error('Error enviando datos a SFTP:', error);
+                
+                const btn = document.querySelector('#actionEnviarInterfaz .action-button');
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+                
+                let mensajeError = `❌ ERROR DE CONEXIÓN SFTP`;
+                if (error.name === 'AbortError') {
+                    mensajeError += '\n⏰ Timeout excedido (60 segundos)';
+                } else {
+                    mensajeError += `\n${error.message}`;
+                }
+                
+                mostrarIndicadorSFTP('error', mensajeError, 15000);
+                mostrarMensaje('error', error.message || 'Error de conexión con el servidor SFTP');
+            }
+        }
+
+        // ========== DESCARGAR EXCEL ==========
+        function descargarExcel() {
+            if (!currentRecepcionData || !currentRecepcionData.detalle_recepcion) {
+                mostrarMensaje('error', 'No hay datos para exportar');
+                return;
+            }
+
+            try {
+                const btn = document.querySelector('#actionEnviarInterfaz + .action-item .action-button');
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                
+                const csvData = [
+                    ['# Línea', 'Número Recepción', 'SKU', 'Línea Externa', 'Cantidad Esperada', 'Cantidad Recibida', 'Fecha Vencimiento', 'Fecha Recepción', 'Estado']
+                ];
+                
+                currentRecepcionData.detalle_recepcion.forEach(detalle => {
+                    const tieneFecha = detalle.fecha_vencimiento && detalle.fecha_vencimiento !== 'N/A';
+                    const estado = tieneFecha ? 'CON FECHA' : 'SIN FECHA';
+                    
+                    csvData.push([
+                        detalle.receiptlinenumber || '',
+                        detalle.receiptkey || '',
+                        detalle.sku || '',
+                        detalle.externlineno || '',
+                        formatoDosDecimales(detalle.qtyexpected),
+                        formatoDosDecimales(detalle.qtyreceived),
+                        detalle.fecha_vencimiento || 'N/A',
+                        detalle.actualreceiptdate || '',
+                        estado
+                    ]);
+                });
+                
+                const csvContent = csvData.map(row => 
+                    row.map(cell => `"${cell}"`).join(',')
+                ).join('\n');
+                
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                link.href = url;
+                link.download = `LIRIS_REC_${currentRecepcionData.informacion_recepcion.receiptkey}_${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                mostrarMensaje('success', 'Archivo Excel descargado correctamente');
+                
+            } catch (error) {
+                console.error('Error generando Excel:', error);
+                mostrarMensaje('error', 'Error al generar archivo Excel');
+                const btn = document.querySelector('#actionEnviarInterfaz + .action-item .action-button');
+                btn.innerHTML = '<i class="fas fa-file-excel"></i>';
+            }
+        }
+
+        // ========== DESCARGAR TXT ==========
+        function descargarTXT() {
+            if (!currentRecepcionData || !currentRecepcionData.detalle_recepcion) {
+                mostrarMensaje('error', 'No hay datos para exportar');
+                return;
+            }
+
+            try {
+                const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                
+                const lines = [];
+                const receiptkey = currentRecepcionData.informacion_recepcion.receiptkey || '';
+                
+                currentRecepcionData.detalle_recepcion.forEach(detalle => {
+                    const fields = [
+                        receiptkey,
+                        detalle.sku || '',
+                        detalle.sku || '',
+                        detalle.receiptlinenumber || '',
+                        formatoDosDecimales(detalle.qtyexpected),
+                        formatoDosDecimales(detalle.qtyreceived),
+                        formatearFechaTXT(detalle.fecha_vencimiento),
+                        formatearFechaTXT(detalle.actualreceiptdate),
+                        detalle.externlineno || ''
+                    ];
+                    lines.push(fields.join('|]'));
+                });
+                
+                const txtContent = lines.join('\n');
+                const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                link.href = url;
+                link.download = `LIRIS_REC_${receiptkey}_${new Date().toISOString().slice(0,8)}.txt`;
+                document.body.appendChild(link);
+                link.click();
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                mostrarMensaje('success', 'Archivo TXT descargado correctamente');
+                
+            } catch (error) {
+                console.error('Error generando TXT:', error);
+                mostrarMensaje('error', 'Error al generar archivo TXT');
+                const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
+                btn.innerHTML = '<i class="fas fa-file-alt"></i>';
+            }
+        }
+
+        // ========== FUNCIONES DE INTERFAZ ==========
+        function mostrarMensaje(tipo, mensaje, duracion = 3000) {
+            const container = document.getElementById("messageContainer");
+            
+            let icono = '';
+            let clase = '';
+            
+            switch(tipo) {
+                case 'error':
+                    icono = '<i class="fas fa-exclamation-circle"></i>';
+                    clase = 'error';
+                    break;
+                case 'warning':
+                    icono = '<i class="fas fa-exclamation-triangle"></i>';
+                    clase = 'warning';
+                    break;
+                case 'success':
+                    icono = '<i class="fas fa-check-circle"></i>';
+                    clase = 'success';
+                    break;
+                case 'info':
+                    icono = '<i class="fas fa-info-circle"></i>';
+                    clase = 'info';
+                    break;
+            }
+            
+            container.innerHTML = `
+                <div class="message ${clase} visible">
+                    ${icono}
+                    <span>${mensaje}</span>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, duracion);
+        }
+
+        function mostrarLoading() {
+            const boton = document.getElementById("btnBuscar");
+            boton.disabled = true;
+            boton.classList.add("loading");
+            boton.innerHTML = '<i class="fas fa-spinner"></i> Consultando...';
+        }
+
+        function ocultarLoading() {
+            const boton = document.getElementById("btnBuscar");
+            boton.disabled = false;
+            boton.classList.remove("loading");
+            boton.innerHTML = '<i class="fas fa-search"></i> Consultar';
+        }
+
+        function ocultarResultados() {
+            document.getElementById("resultSection").style.display = 'none';
+            ocultarBotonesFlotantes();
+        }
+
+        function limpiarResultados() {
+            document.getElementById("asnHeader").innerHTML = '';
+            document.getElementById("detalleBody").innerHTML = '';
+            document.getElementById("totalEsperado").textContent = '0';
+            document.getElementById("totalRecibido").textContent = '0';
+            document.getElementById("totalLineas").textContent = '0';
+            document.getElementById("lineasConFecha").textContent = '0';
+            document.getElementById("lineasConProblemas").textContent = '0';
+            currentRecepcionData = null;
+        }
+
+        function llenarInformacionRecepcion(info) {
+            const container = document.getElementById("asnHeader");
+            
+            // 7 campos (eliminado "Tipo")
+            const campos = [
+                { label: 'Número Recepción', value: info.receiptkey || 'N/A', clase: 'receiptkey' },
+                { label: 'Número Externo', value: info.externreceiptkey || 'N/A' },
+                { label: 'Cliente ID', value: info.storerkey || 'N/A' },
+                { label: 'Estado', value: info.status_texto || info.status || 'N/A' },
+                { label: 'Fecha Creación', value: info.adddate || 'N/A' },
+                { label: 'Fecha Cierre', value: info.closeddate || 'N/A' },
+                { label: 'Fecha Edición', value: info.editdate || 'N/A' }
+                // NO incluir "Fecha Aviso" - solo 7 campos
+            ];
+            
+            container.innerHTML = campos.map(campo => `
+                <div class="asn-info">
+                    <span class="info-label">${campo.label}</span>
+                    <span class="info-value ${campo.clase || ''}">${campo.value}</span>
+                </div>
+            `).join('');
+        }
+
+        function determinarClaseVencimiento(fecha) {
+            return fecha && fecha !== 'N/A' ? 'con-fecha' : 'sin-fecha';
+        }
+
+        function cantidadesCoinciden(esperada, recibida) {
+            const esperadaNum = parseFloat(esperada) || 0;
+            const recibidaNum = parseFloat(recibida) || 0;
+            return esperadaNum === recibidaNum;
+        }
+
+        function tieneProblemas(detalle) {
+            const sinFecha = !detalle.fecha_vencimiento || detalle.fecha_vencimiento === 'N/A';
+            const cantidadesDiferentes = !cantidadesCoinciden(detalle.qtyexpected, detalle.qtyreceived);
+            return sinFecha || cantidadesDiferentes;
+        }
+
+        function llenarTablaDetalles(detalles) {
+            const tbody = document.getElementById("detalleBody");
+            
+            if (!detalles || detalles.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="no-data">
+                            <i class="fas fa-database"></i>
+                            <div>No se encontraron detalles de la recepción</div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            detalles.sort((a, b) => {
+                const aNum = parseInt(a.receiptlinenumber) || 0;
+                const bNum = parseInt(b.receiptlinenumber) || 0;
+                return aNum - bNum;
+            });
+            
+            tbody.innerHTML = detalles.map(detalle => {
+                const claseVencimiento = determinarClaseVencimiento(detalle.fecha_vencimiento);
+                const coinciden = cantidadesCoinciden(detalle.qtyexpected, detalle.qtyreceived);
+                const conProblemas = tieneProblemas(detalle);
+                const claseFila = conProblemas ? 'con-problemas' : '';
+                const claseQty = coinciden ? '' : 'diferencia';
+                
+                return `
+                    <tr class="${claseFila}">
+                        <td class="receiptlinenumber">${detalle.receiptlinenumber || 'N/A'}</td>
+                        <td class="receiptkey">${detalle.receiptkey || 'N/A'}</td>
+                        <td class="sku">${detalle.sku || 'N/A'}</td>
+                        <td class="externlineno">${detalle.externlineno || 'N/A'}</td>
+                        <td class="qty">${detalle.qtyexpected || '0'}</td>
+                        <td class="qty ${claseQty}">
+                            ${detalle.qtyreceived || '0'}
+                        </td>
+                        <td class="vencimiento ${claseVencimiento}">
+                            ${detalle.fecha_vencimiento || 'Sin Fecha'}
+                        </td>
+                        <td class="actualreceiptdate">${detalle.actualreceiptdate || 'N/A'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function actualizarTotales(detalles) {
+            let totalEsperado = 0;
+            let totalRecibido = 0;
+            let lineasConFecha = 0;
+            let lineasCoincidentes = 0;
+            let lineasConProblemas = 0;
+            
+            detalles.forEach(detalle => {
+                const esperada = parseFloat(detalle.qtyexpected) || 0;
+                const recibida = parseFloat(detalle.qtyreceived) || 0;
+                
+                totalEsperado += esperada;
+                totalRecibido += recibida;
+                
+                if (detalle.fecha_vencimiento && detalle.fecha_vencimiento !== 'N/A') {
+                    lineasConFecha++;
+                }
+                
+                if (esperada === recibida) {
+                    lineasCoincidentes++;
+                }
+                
+                if (tieneProblemas(detalle)) {
+                    lineasConProblemas++;
+                }
+            });
+            
+            const formatearNumero = (num) => {
+                return num.toLocaleString('es-ES');
+            };
+            
+            document.getElementById("totalEsperado").textContent = formatearNumero(totalEsperado);
+            document.getElementById("totalRecibido").textContent = formatearNumero(totalRecibido);
+            document.getElementById("totalLineas").textContent = formatearNumero(detalles.length);
+            document.getElementById("lineasConFecha").textContent = formatearNumero(lineasConFecha);
+            document.getElementById("lineasConProblemas").textContent = formatearNumero(lineasConProblemas);
+            
+            const problemaCard = document.querySelector('.stat-card:nth-child(5)');
+            if (lineasConProblemas > 0) {
+                problemaCard.style.borderTopColor = '#e74c3c';
+                problemaCard.querySelector('.stat-label i').style.color = '#e74c3c';
+                problemaCard.querySelector('.stat-value').style.color = '#e74c3c';
+            } else {
+                problemaCard.style.borderTopColor = '#1a970a';
+                problemaCard.querySelector('.stat-label i').style.color = '#1a970a';
+                problemaCard.querySelector('.stat-value').style.color = '#2c3e50';
+            }
+            
+            return { 
+                totalEsperado, 
+                totalRecibido, 
+                totalLineas: detalles.length,
+                lineasConFecha,
+                lineasCoincidentes,
+                lineasConProblemas
+            };
+        }
+
+        function mostrarResultados(informacion, detalles) {
+            currentRecepcionData = {
+                informacion_recepcion: informacion,
+                detalle_recepcion: detalles
+            };
+            
+            llenarInformacionRecepcion(informacion);
+            const estadisticas = actualizarTotales(detalles);
+            llenarTablaDetalles(detalles);
+            
+            // Verificar que status sea 15 para mostrar botón SFTP
+            mostrarBotonesFlotantes(informacion.status);
+            
+            document.getElementById("resultSection").style.display = 'block';
+            
+            let mensaje = `Recepción encontrada: ${estadisticas.totalLineas} líneas`;
+            if (estadisticas.lineasConProblemas > 0) {
+                mensaje += `, ⚠️ ${estadisticas.lineasConProblemas} líneas con problemas`;
+                mostrarMensaje('warning', mensaje, 3000);
+            } else {
+                mensaje += `, ✅ Todas las líneas están correctas`;
+                mostrarMensaje('success', mensaje, 2000);
+            }
+            
+            document.getElementById("resultSection").scrollIntoView({ 
+                behavior: 'smooth' 
+            });
+        }
+
+        // ========== BÚSQUEDA PRINCIPAL ==========
+        async function buscarRecepcion() {
+            const numeroRecepcion = document.getElementById("numeroRecepcion").value.trim();
+            
+            if (!numeroRecepcion) {
+                mostrarMensaje('warning', 'Por favor ingrese un número de Recepción');
+                return;
+            }
+
+            try {
+                mostrarLoading();
+                ocultarResultados();
+                limpiarResultados();
+                
+                const response = await fetch(`consulta_liris_asn.php?valor=${encodeURIComponent(numeroRecepcion)}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                ocultarLoading();
+                
+                if (data.error) {
+                    mostrarMensaje('error', data.error);
+                    return;
+                }
+                
+                if (data.informacion_recepcion && data.detalle_recepcion) {
+                    mostrarResultados(data.informacion_recepcion, data.detalle_recepcion);
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                ocultarLoading();
+                mostrarMensaje('error', `Error al consultar la recepción: ${error.message}`);
+            }
+        }
+
+        // ========== EVENT LISTENERS ==========
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById("btnBuscar").addEventListener("click", buscarRecepcion);
+            
+            document.getElementById("numeroRecepcion").addEventListener("keypress", function(e) {
+                if (e.key === "Enter") {
+                    buscarRecepcion();
+                }
+            });
+            
+            document.getElementById("numeroRecepcion").addEventListener("focus", function() {
+                this.select();
+            });
+            
+            // Cambiar placeholder
+            const ejemplos = ["60820241326", "60820241327", "60820241328"];
+            const input = document.getElementById("numeroRecepcion");
+            let ejemploIndex = 0;
+            
+            setInterval(() => {
+                input.placeholder = `🔍 Ingrese número de Recepción (ej: ${ejemplos[ejemploIndex]})`;
+                ejemploIndex = (ejemploIndex + 1) % ejemplos.length;
+            }, 3000);
+        });
+    </script>
+</body>
+</html>

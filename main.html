@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIRIS - Sistema de Consultas</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7f9 0%, #e3e8ef 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #2c3e50;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header con diseño del segundo sistema */
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 50px;
+            padding: 25px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #1a970a;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header-top::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #1a970a, #09a811);
+            animation: shimmer 3s infinite linear;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .logo {
+            height: 55px;
+            object-fit: contain;
+            flex-shrink: 0;
+            filter: drop-shadow(0 3px 6px rgba(0,0,0,0.1));
+            transition: transform 0.3s ease;
+        }
+
+        .logo:hover {
+            transform: scale(1.05);
+        }
+
+        .title-section {
+            flex: 1;
+            text-align: center;
+        }
+
+        .title {
+            font-size: 2.8rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            position: relative;
+            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.15);
+            animation: subtleGlow 3s ease-in-out infinite alternate;
+            background: linear-gradient(135deg, #1a970a, #2c3e50);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        @keyframes subtleGlow {
+            0% {
+                text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.15);
+                transform: translateY(0);
+            }
+            100% {
+                text-shadow: 2px 2px 12px rgba(26, 151, 10, 0.4);
+                transform: translateY(-3px);
+            }
+        }
+
+        .title::after {
+            content: '';
+            display: block;
+            width: 100px;
+            height: 5px;
+            background: linear-gradient(90deg, #1a970a, #09a811);
+            margin: 15px auto 0;
+            border-radius: 3px;
+            animation: lineGrow 1.5s ease-out;
+        }
+
+        @keyframes lineGrow {
+            from {
+                width: 0;
+                opacity: 0;
+            }
+            to {
+                width: 100px;
+                opacity: 1;
+            }
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #7f8c8d;
+            font-weight: 500;
+            margin-top: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        /* Contenedor principal de opciones */
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+            padding: 40px 20px;
+        }
+
+        /* Grid de opciones */
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 40px;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .option-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border-radius: 20px;
+            padding: 40px 30px;
+            text-align: center;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            min-height: 350px;
+        }
+
+        .option-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            border-color: #1a970a;
+        }
+
+        .option-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, #1a970a, #09a811);
+            transition: height 0.3s ease;
+        }
+
+        .option-card:hover::before {
+            height: 8px;
+        }
+
+        .option-card::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(26, 151, 10, 0.05), transparent);
+            transform: rotate(45deg);
+            transition: all 0.6s ease;
+            opacity: 0;
+        }
+
+        .option-card:hover::after {
+            animation: shimmerEffect 1s;
+            opacity: 1;
+        }
+
+        @keyframes shimmerEffect {
+            0% { transform: translateX(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) rotate(45deg); }
+        }
+
+        .option-icon {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #f6f3e8 0%, #ede5d4 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 25px;
+            transition: all 0.3s ease;
+            position: relative;
+            border: 3px solid #ff9500;
+        }
+
+        .option-card:hover .option-icon {
+            transform: scale(1.1) rotate(5deg);
+            background: linear-gradient(135deg, #ede5d4 0%, #e6d8c3 100%);
+            box-shadow: 0 10px 20px rgba(248, 153, 0, 0.2);
+        }
+
+        .option-icon i {
+            font-size: 48px;
+            color: #ff9500;
+            transition: all 0.3s ease;
+        }
+
+        .option-card:hover .option-icon i {
+            color: #ff9500;
+            transform: scale(1.1);
+        }
+
+        .option-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .option-title::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, #1a970a, #09a811);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .option-card:hover .option-title::after {
+            width: 100px;
+        }
+
+        .option-description {
+            font-size: 1.1rem;
+            color: #7f8c8d;
+            line-height: 1.6;
+            margin-bottom: 25px;
+            max-width: 300px;
+        }
+
+        /* Pie de página */
+        .footer {
+            text-align: center;
+            margin-top: 60px;
+            padding: 25px;
+            color: #7f8c8d;
+            font-size: 14px;
+            border-top: 1px solid #e9ecef;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .footer p {
+            margin: 5px 0;
+        }
+
+        .footer i {
+            color: #1a970a;
+            margin: 0 5px;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .options-grid {
+                grid-template-columns: 1fr;
+                max-width: 500px;
+            }
+            
+            .option-card {
+                min-height: 320px;
+            }
+            
+            .title {
+                font-size: 2.2rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+            
+            .header-top {
+                flex-direction: column;
+                text-align: center;
+                gap: 20px;
+                padding: 20px;
+            }
+            
+            .logo-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .title {
+                font-size: 2rem;
+            }
+            
+            .subtitle {
+                font-size: 1rem;
+            }
+            
+            .option-card {
+                padding: 30px 20px;
+                min-height: 300px;
+            }
+            
+            .option-title {
+                font-size: 1.8rem;
+            }
+            
+            .option-icon {
+                width: 90px;
+                height: 90px;
+            }
+            
+            .option-icon i {
+                font-size: 42px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .title {
+                font-size: 1.7rem;
+            }
+            
+            .options-grid {
+                grid-template-columns: 1fr;
+                gap: 25px;
+            }
+            
+            .option-card {
+                min-height: 280px;
+                padding: 25px 15px;
+            }
+            
+            .option-title {
+                font-size: 1.6rem;
+            }
+            
+            .option-description {
+                font-size: 1rem;
+            }
+        }
+
+        /* Animación de entrada */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-in {
+            animation: fadeInUp 0.6s ease-out forwards;
+        }
+
+        .delay-1 {
+            animation-delay: 0.2s;
+            opacity: 0;
+        }
+
+        .delay-2 {
+            animation-delay: 0.4s;
+            opacity: 0;
+        }
+
+        /* Botón de volver (para futuras páginas) */
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: linear-gradient(135deg, #1a970a, #09a811);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(26, 151, 10, 0.2);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        .back-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(26, 151, 10, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header con logos -->
+        <div class="header-top animate-in">
+            <div class="logo-container">
+                <img src="https://tse2.mm.bing.net/th/id/OIP.Ckl7mNDKlUqm6056On3FIwAAAA?w=380&h=125&rs=1&pid=ImgDetMain&o=7&rm=3" 
+                     class="logo" 
+                     alt="Logo Servientrega"
+                     loading="lazy">
+                <img src="https://crepier.com.ec/media/logo/default/LOGO-WEB.png" 
+                     class="logo" 
+                     alt="Logo Cliente"
+                     loading="lazy">
+            </div>
+            
+            <div class="title-section">
+                <h1 class="title">Sistema LIRIS</h1>
+                <p class="subtitle">Plataforma Integrada de Gestión y Consultas</p>
+            </div>
+        </div>
+
+        <!-- Contenido principal -->
+        <div class="main-container">
+            <!-- Grid de opciones -->
+            <div class="options-grid">
+                <!-- Opción 1: Órdenes de Compra -->
+                <div class="option-card animate-in delay-1" id="ordenesCompra">
+                    <div class="option-icon">
+                        <i class="fas fa-shopping-cart"></i>
+                    </div>
+                    <h2 class="option-title">Órdenes de Compra</h2>
+                    <p class="option-description">
+                        Consulta y gestión de órdenes de compra del sistema LIRIS
+                    </p>
+                </div>
+
+                <!-- Opción 2: Despachos -->
+                <div class="option-card animate-in delay-2" id="despachos">
+                    <div class="option-icon">
+                        <i class="fas fa-truck-loading"></i>
+                    </div>
+                    <h2 class="option-title">Despachos</h2>
+                    <p class="option-description">
+                        Seguimiento y control de despachos y entregas
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pie de página -->
+        <div class="footer animate-in delay-2">
+            <p><i class="fas fa-shield-alt"></i> Sistema seguro y confiable <i class="fas fa-lock"></i></p>
+            <p>Sistema LIRIS &copy; 2024 - Todos los derechos reservados</p>
+            <p style="font-size: 12px; margin-top: 8px; color: #95a5a6;">
+                <i class="fas fa-info-circle"></i> Versión 2.0 | Última actualización: Diciembre 2024
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Función para navegar directamente a las diferentes secciones
+        function navegarA(modulo) {
+            // Efecto visual al hacer clic
+            const card = document.getElementById(modulo === 'ordenes-compra' ? 'ordenesCompra' : 'despachos');
+            card.style.transform = 'scale(0.95)';
+            card.style.opacity = '0.8';
+            
+            // Redirección directa sin popup
+            setTimeout(() => {
+                if (modulo === 'ordenes-compra') {
+                    // Redirigir a la página de consultas LIRIS
+                    // Cambia 'consultas_liris.html' por el nombre correcto de tu archivo
+                    window.location.href = 'recepcion_asn.html';
+                } else if (modulo === 'despachos') {
+                    // Redirigir a la página de despachos
+                    // Cambia 'despachos.html' por el nombre correcto de tu archivo
+                    window.location.href = 'despachos1.html';
+                }
+            }, 200); // Pequeña pausa para el efecto visual
+        }
+
+        // Asignar eventos de clic a las tarjetas
+        document.addEventListener('DOMContentLoaded', function() {
+            // Efecto de animación al cargar
+            const elementos = document.querySelectorAll('.animate-in');
+            elementos.forEach((el, index) => {
+                el.style.animationDelay = `${index * 0.1}s`;
+            });
+            
+            // Asignar eventos de clic a las tarjetas
+            document.getElementById('ordenesCompra').addEventListener('click', function() {
+                navegarA('ordenes-compra');
+            });
+            
+            document.getElementById('despachos').addEventListener('click', function() {
+                navegarA('despachos');
+            });
+            
+            // Navegación por teclado (opcional, puedes mantenerlo)
+            document.addEventListener('keydown', function(e) {
+                if (e.key === '1' || e.key === 'Numpad1') {
+                    navegarA('ordenes-compra');
+                } else if (e.key === '2' || e.key === 'Numpad2') {
+                    navegarA('despachos');
+                }
+            });
+            
+            // Mostrar atajo de teclado en hover (opcional)
+            const cards = document.querySelectorAll('.option-card');
+            cards[0].title = 'Presiona 1 para acceder rápidamente';
+            cards[1].title = 'Presiona 2 para acceder rápidamente';
+        });
+
+        // Función para agregar botón de volver (para usar en páginas hijas)
+        function agregarBotonVolver() {
+            const botonVolver = document.createElement('button');
+            botonVolver.className = 'back-button';
+            botonVolver.innerHTML = '<i class="fas fa-arrow-left"></i> Volver al inicio';
+            botonVolver.onclick = function() {
+                window.location.href = 'index.html';
+            };
+            document.body.appendChild(botonVolver);
+        }
+    </script>
+</body>
+</html>
