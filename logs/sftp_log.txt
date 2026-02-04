@@ -13,3 +13,19 @@ Líneas: 101
 Ruta: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/00625414_091.txt
 IP: ::1
 -----------------------------
+2026-02-04 22:24:58 | ÉXITO
+Orden: 60820241256
+Archivo: 60820241256.txt
+Tamaño: 187492 bytes
+Líneas: 2000
+Ruta: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/60820241256.txt
+IP: ::1
+-----------------------------
+2026-02-04 22:25:38 | ÉXITO
+Orden: OC_005727283
+Archivo: OC_005727283.txt
+Tamaño: 1872 bytes
+Líneas: 20
+Ruta: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/OC_005727283.txt
+IP: ::1
+-----------------------------
