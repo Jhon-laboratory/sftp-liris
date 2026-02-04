@@ -12,3 +12,7 @@ Ruta backup: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/20260204/60820241256
 Ruta principal: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/OC_005727283.txt
 Ruta backup: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/20260204/OC_005727283.txt
 
+2026-02-04 22:30:25 | Archivo: OC_005727283.txt | Tamaño: 1872 bytes | Líneas: 20
+Ruta principal: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/OC_005727283.txt
+Ruta backup: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/20260204/OC_005727283.txt
+

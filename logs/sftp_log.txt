@@ -29,3 +29,11 @@ Líneas: 20
 Ruta: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/OC_005727283.txt
 IP: ::1
 -----------------------------
+2026-02-04 22:30:26 | ÉXITO
+Orden: OC_005727283
+Archivo: OC_005727283.txt
+Tamaño: 1872 bytes
+Líneas: 20
+Ruta: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/OC_005727283.txt
+IP: ::1
+-----------------------------
