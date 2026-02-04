@@ -1,207 +1,156 @@
 <?php
-require __DIR__ . '/phpseclib/vendor/autoload.php';
-use phpseclib3\Net\SFTP;
+// enviarsftp.php - VERSIÓN LIMPIA SIN POSIBLES ERRORES
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/logs/php_errors.log');
 
+// 1. Buffer de salida para capturar cualquier output no deseado
+ob_start();
+
+// 2. Verificar autoloader
+$autoload_path = __DIR__ . '/phpseclib/vendor/autoload.php';
+if (!file_exists($autoload_path)) {
+    ob_end_clean();
+    header('Content-Type: application/json');
+    http_response_code(500);
+    echo json_encode(['error' => 'phpseclib no encontrado']);
+    exit;
+}
+
+require_once $autoload_path;
+
+// 3. Configurar headers después de verificar todo
 header('Content-Type: application/json');
-
-// Permitir CORS
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
-// Manejar preflight OPTIONS
+// 4. Manejar OPTIONS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    ob_end_clean();
     http_response_code(200);
     exit();
 }
 
-// ---------- VALIDACIÓN DE DATOS ----------
-$input = json_decode(file_get_contents('php://input'), true);
-
-if (!$input) {
+// 5. Obtener y validar datos
+$input_data = file_get_contents('php://input');
+if (empty($input_data)) {
+    ob_end_clean();
     http_response_code(400);
-    echo json_encode(['error' => 'No se recibieron datos JSON']);
+    echo json_encode(['error' => 'No se recibieron datos']);
     exit;
 }
 
-$contenido = $input['contenido'] ?? '';
-$nombre_archivo = $input['nombre_archivo'] ?? '';
-$orden = $input['orden'] ?? '';
-
-if (empty($contenido) || empty($nombre_archivo) || empty($orden)) {
+$input = json_decode($input_data, true);
+if (json_last_error() !== JSON_ERROR_NONE) {
+    ob_end_clean();
     http_response_code(400);
     echo json_encode([
-        'error' => 'Datos incompletos',
-        'recibido' => [
-            'contenido' => !empty($contenido),
-            'nombre_archivo' => $nombre_archivo,
-            'orden' => $orden
-        ]
+        'error' => 'JSON inválido',
+        'json_error' => json_last_error_msg(),
+        'raw_data' => substr($input_data, 0, 200)
     ]);
     exit;
 }
 
-// Validación más flexible del nombre del archivo
-if (!preg_match('/\.txt$/i', $nombre_archivo)) {
-    http_response_code(400);
-    echo json_encode([
-        'error' => 'Nombre de archivo inválido. Debe terminar en .txt',
-        'nombre_recibido' => $nombre_archivo
-    ]);
-    exit;
+// 6. Validar campos requeridos
+$required = ['contenido', 'nombre_archivo', 'orden'];
+foreach ($required as $field) {
+    if (empty($input[$field])) {
+        ob_end_clean();
+        http_response_code(400);
+        echo json_encode(['error' => "Campo '$field' requerido"]);
+        exit;
+    }
 }
 
-// ---------- CONFIGURACIÓN SFTP ----------
+$contenido = $input['contenido'];
+$nombre_archivo = $input['nombre_archivo'];
+$orden = $input['orden'];
+
+// 7. Limpiar buffer de salida antes de procesar
+$buffer_content = ob_get_contents();
+if (strlen($buffer_content) > 0) {
+    error_log("ADVERTENCIA: Buffer tenía contenido antes de procesar: " . substr($buffer_content, 0, 100));
+}
+ob_end_clean();
+
+// 8. Configuración SFTP
 $host = '40.121.159.89';
 $port = 22;
 $user = 'lirisprd';
 $pass = 'lirisPROD01';
-
-// **CAMBIOS IMPORTANTES AQUÍ:**
-// 1. Carpeta base donde se deben colocar los archivos
 $base_remote_dir = '/RECIBE/TRANSACCIONES/ConfirmacionCG';
-// 2. Subcarpeta específica para estos archivos
 $subfolder = 'Historico';
 
-// Crear carpeta logs si no existe
+// 9. Crear logs
 $log_dir = __DIR__ . '/logs';
 if (!is_dir($log_dir)) {
     mkdir($log_dir, 0755, true);
 }
 
 try {
-    // Crear conexión SFTP
-    $sftp = new SFTP($host, $port);
-    $sftp->setTimeout(30); // Timeout de 30 segundos
+    // 10. Crear conexión SFTP
+    $sftp = new phpseclib3\Net\SFTP($host, $port);
+    $sftp->setTimeout(30);
     
     if (!$sftp->login($user, $pass)) {
-        throw new Exception("No se pudo autenticar en el servidor SFTP. Verifica credenciales.");
+        throw new Exception("Error de autenticación SFTP");
     }
     
-    // **VERIFICAR Y CREAR ESTRUCTURA DE CARPETAS**
-    // Lista de carpetas que deben existir
-    $folders = [
-        $base_remote_dir,
-        $base_remote_dir . '/' . $subfolder
-    ];
-    
-    foreach ($folders as $folder) {
-        if (!$sftp->file_exists($folder)) {
-            if (!$sftp->mkdir($folder, 0755, true)) {
-                throw new Exception("No se pudo crear la carpeta: $folder");
-            }
+    // 11. Verificar/Crear estructura de carpetas
+    $main_folder = $base_remote_dir . '/' . $subfolder;
+    if (!$sftp->file_exists($main_folder)) {
+        if (!$sftp->mkdir($main_folder, 0755, true)) {
+            throw new Exception("No se pudo crear carpeta: $main_folder");
         }
     }
     
-    // **CREAR CARPETA DIARIA PARA BACKUP**
-    $fecha_carpeta = date('Ymd');
-    $carpeta_diaria = $base_remote_dir . '/' . $subfolder . '/' . $fecha_carpeta;
+    // 12. Ruta destino
+    $remote_path = $main_folder . '/' . $nombre_archivo;
     
-    if (!$sftp->file_exists($carpeta_diaria)) {
-        if (!$sftp->mkdir($carpeta_diaria, 0755)) {
-            // Si no se puede crear la carpeta diaria, continuar igual
-            // Los archivos se subirán a la carpeta principal
-        }
+    // 13. Subir archivo
+    if (!$sftp->put($remote_path, $contenido)) {
+        throw new Exception("Error al subir archivo a SFTP");
     }
     
-    // **RUTAS DE DESTINO**
-    // 1. Ruta principal (donde debe ir el archivo activo)
-    $remote_path_main = $base_remote_dir . '/' . $subfolder . '/' . $nombre_archivo;
-    
-    // 2. Ruta de backup (en carpeta diaria)
-    $remote_path_backup = $carpeta_diaria . '/' . $nombre_archivo;
-    
-    // **VALIDAR CONTENIDO**
-    $tamano = strlen($contenido);
-    $lineas = substr_count($contenido, "\n") + 1;
-    
-    if (empty(trim($contenido))) {
-        throw new Exception("El contenido del archivo está vacío");
-    }
-    
-    // **VERIFICAR SI EL ARCHIVO YA EXISTE**
-    if ($sftp->file_exists($remote_path_main)) {
-        // OPCIONAL: Renombrar archivo existente con timestamp
-        $timestamp = date('Ymd_His');
-        $old_filename = $nombre_archivo . '_' . $timestamp;
-        $old_path = $base_remote_dir . '/' . $subfolder . '/' . $old_filename;
-        
-        if (!$sftp->rename($remote_path_main, $old_path)) {
-            // Si no se puede renombrar, eliminar el viejo
-            $sftp->delete($remote_path_main);
-        }
-    }
-    
-    // **LOG DE DEPURACIÓN**
-    $debug_log = date('Y-m-d H:i:s') . " | Archivo: $nombre_archivo | Tamaño: $tamano bytes | Líneas: $lineas\n";
-    $debug_log .= "Ruta principal: $remote_path_main\n";
-    $debug_log .= "Ruta backup: $remote_path_backup\n\n";
-    file_put_contents($log_dir . '/sftp_debug.txt', $debug_log, FILE_APPEND);
-    
-    // **SUBIR ARCHIVO PRINCIPAL**
-    if (!$sftp->put($remote_path_main, $contenido)) {
-        $last_error = $sftp->getLastSFTPError();
-        throw new Exception("Error al subir archivo principal: " . $last_error);
-    }
-    
-    // **SUBIR COPIA DE BACKUP (si existe la carpeta diaria)**
-    if ($sftp->file_exists($carpeta_diaria)) {
-        $sftp->put($remote_path_backup, $contenido);
-    }
-    
-    // **VERIFICAR QUE EL ARCHIVO SE SUBIÓ CORRECTAMENTE**
-    if (!$sftp->file_exists($remote_path_main)) {
+    // 14. Verificar subida
+    if (!$sftp->file_exists($remote_path)) {
         throw new Exception("No se pudo verificar la subida del archivo");
     }
     
-    // **LOGS DE ÉXITO**
-    $log_entry = date('Y-m-d H:i:s') . " | ÉXITO\n";
-    $log_entry .= "Orden: $orden\n";
-    $log_entry .= "Archivo: $nombre_archivo\n";
-    $log_entry .= "Tamaño: $tamano bytes\n";
-    $log_entry .= "Líneas: $lineas\n";
-    $log_entry .= "Ruta: $remote_path_main\n";
-    $log_entry .= "IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'desconocida') . "\n";
-    $log_entry .= "-----------------------------\n";
+    $file_size = $sftp->filesize($remote_path);
     
-    file_put_contents($log_dir . '/sftp_log.txt', $log_entry, FILE_APPEND);
+    // 15. Log de éxito
+    file_put_contents($log_dir . '/sftp_success.log', 
+        date('Y-m-d H:i:s') . " | $orden | $nombre_archivo | $file_size bytes\n", 
+        FILE_APPEND
+    );
     
-    // **RESPUESTA DE ÉXITO**
+    // 16. Respuesta de éxito
     echo json_encode([
         'success' => true,
-        'mensaje' => 'Archivo enviado correctamente a SFTP',
+        'message' => 'Archivo enviado correctamente',
         'archivo' => $nombre_archivo,
-        'ruta' => $remote_path_main,
-        'bytes' => $tamano,
-        'lineas' => $lineas,
-        'fecha' => date('Y-m-d H:i:s'),
-        'orden' => $orden,
-        'backup' => $remote_path_backup,
-        'server_path' => $base_remote_dir . '/' . $subfolder
+        'ruta' => $remote_path,
+        'bytes' => $file_size,
+        'orden' => $orden
     ]);
     
 } catch (Exception $e) {
+    // 17. Log de error
+    file_put_contents($log_dir . '/sftp_errors.log', 
+        date('Y-m-d H:i:s') . " | ERROR: " . $e->getMessage() . "\n", 
+        FILE_APPEND
+    );
+    
+    // 18. Respuesta de error
     http_response_code(500);
-    
-    // **LOG DE ERROR DETALLADO**
-    $error_log = date('Y-m-d H:i:s') . " | ERROR\n";
-    $error_log .= "Mensaje: " . $e->getMessage() . "\n";
-    $error_log .= "Orden: $orden\n";
-    $error_log .= "Archivo: $nombre_archivo\n";
-    $error_log .= "IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'desconocida') . "\n";
-    $error_log .= "Trace: " . $e->getTraceAsString() . "\n";
-    $error_log .= "-----------------------------\n";
-    
-    file_put_contents($log_dir . '/sftp_errors.txt', $error_log, FILE_APPEND);
-    
-    // **RESPUESTA DE ERROR**
     echo json_encode([
         'success' => false,
         'error' => $e->getMessage(),
-        'detalles' => 'Error en conexión SFTP',
-        'archivo_intentado' => $nombre_archivo,
-        'ruta_intentada' => isset($remote_path_main) ? $remote_path_main : 'No definida',
-        'timestamp' => date('Y-m-d H:i:s')
+        'archivo' => $nombre_archivo
     ]);
 }
 ?>
