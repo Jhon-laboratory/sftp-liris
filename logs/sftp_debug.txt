@@ -1,0 +1,6 @@
+2026-02-04 21:22:45 | Intentando enviar: OC_005727283.txt | Tamaño: 1872 bytes | Líneas: 20
+2026-02-04 21:45:17 | Intentando enviar: LIRIS_00625414_091_202602.txt | Tamaño: 8094 bytes | Líneas: 101
+2026-02-04 21:50:07 | Archivo: 00625414_091.txt | Tamaño: 8094 bytes | Líneas: 101
+Ruta principal: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/00625414_091.txt
+Ruta backup: /RECIBE/TRANSACCIONES/ConfirmacionCG/Historico/20260204/00625414_091.txt
+

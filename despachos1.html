@@ -225,7 +225,7 @@
                 opacity: 0;
             }
             to {
-                transform: translateX(0);
+                transform: translateY(0);
                 opacity: 1;
             }
         }
@@ -1220,7 +1220,7 @@
         }
 
         function irAVerificadasCerradas() {
-            window.location.href =  ('recepcion_asn.html');
+            window.location.href = ('recepcion_asn.html');
         }
 
         // ========== INDICADOR SFTP ==========
@@ -1316,6 +1316,7 @@
             return numFloat.toFixed(2);
         }
 
+        // NUEVA FUNCIÓN: Formatear fecha para TXT/SFTP (solo orden externa)
         function formatearFechaTXT(fechaStr) {
             if (!fechaStr || fechaStr === 'N/A') return '';
             
@@ -1379,17 +1380,20 @@
                 
                 // Agregar filas de datos
                 currentPedidoData.detalle_pedido.forEach(detalle => {
-                    const tieneLPN = detalle.id && detalle.id !== '' && detalle.id !== 'Sin LPN';
+                    const tieneLPN = detalle.id && detalle.id !== '';
                     const estado = tieneLPN ? 'CON LPN' : 'SIN LPN';
                     
+                    // Número de línea simple (1, 2, 3...)
+                    const numeroLinea = parseInt(detalle.orderlinenumber) || '';
+                    
                     const fila = [
-                        detalle.orderlinenumber || '',
+                        numeroLinea,
                         detalle.externorderkey || '',
                         detalle.sku || '',
                         detalle.externlineno || '',
                         formatoDosDecimales(detalle.originalqty),
                         formatoDosDecimales(detalle.shippedqty),
-                        detalle.id || 'Sin LPN',
+                        detalle.id || '',
                         detalle.actualshipdate || '',
                         estado
                     ];
@@ -1401,7 +1405,7 @@
                 
                 // Ajustar ancho de columnas automáticamente
                 const wscols = [
-                    {wch: 12}, // # Línea
+                    {wch: 8},  // # Línea (más pequeño)
                     {wch: 20}, // Orden Externa
                     {wch: 20}, // SKU
                     {wch: 15}, // Línea Externa
@@ -1437,234 +1441,242 @@
         }
 
         // ========== DESCARGAR TXT ==========
-        function descargarTXT() {
-            if (!currentPedidoData || !currentPedidoData.detalle_pedido) {
-                mostrarMensaje('error', 'No hay datos para exportar');
-                return;
-            }
+        // ========== DESCARGAR TXT ==========
+function descargarTXT() {
+    if (!currentPedidoData || !currentPedidoData.detalle_pedido) {
+        mostrarMensaje('error', 'No hay datos para exportar');
+        return;
+    }
 
+    try {
+        const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        const lines = [];
+        const externorderkey = currentPedidoData.informacion_pedido.externorderkey || '';
+        
+        // Validar que tenemos orden externa
+        if (!externorderkey) {
+            mostrarMensaje('error', 'No se encontró orden externa para exportar');
+            btn.innerHTML = originalHTML;
+            return;
+        }
+        
+        currentPedidoData.detalle_pedido.forEach(detalle => {
+            // Formato TXT: solo orden externa (sin duplicar SKU)
+            const fields = [
+                externorderkey,                    // Orden Externa
+                detalle.sku || '',                // SKU
+                detalle.orderlinenumber || '',    // # Línea (simple: 1, 2, 3...)
+                formatoDosDecimales(detalle.originalqty),
+                formatoDosDecimales(detalle.shippedqty),
+                formatearFechaTXT(detalle.actualshipdate),
+                detalle.id || ''                  // LPN (ID)
+            ];
+            lines.push(fields.join('|]'));
+        });
+        
+        const txtContent = lines.join('\n');
+        const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        // CAMBIO AQUÍ: Solo orden externa + .txt
+        link.href = url;
+        link.download = `${externorderkey}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+        mostrarMensaje('success', `Archivo ${externorderkey}.txt descargado correctamente`);
+        
+    } catch (error) {
+        console.error('Error generando TXT:', error);
+        mostrarMensaje('error', 'Error al generar archivo TXT');
+        
+        const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
+        btn.innerHTML = '<i class="fas fa-file-alt"></i>';
+    }
+}
+
+// ========== ENVIAR DATOS A INTERFAZ SFTP ==========
+async function enviarDatosInterfaz() {
+    if (!currentPedidoData || !currentPedidoData.detalle_pedido) {
+        mostrarIndicadorSFTP('error', '❌ No hay datos para enviar');
+        return;
+    }
+
+    // Validar que status sea 95
+    const status = currentPedidoData.informacion_pedido.status;
+    const externorderkey = currentPedidoData.informacion_pedido.externorderkey || '';
+    const totalLineas = currentPedidoData.detalle_pedido.length;
+    
+    // Validar que tenemos orden externa
+    if (!externorderkey) {
+        mostrarIndicadorSFTP('error', '❌ No se encontró orden externa para enviar');
+        return;
+    }
+    
+    if (status !== '95') {
+        mostrarIndicadorSFTP('warning', `⚠️ Solo se pueden enviar pedidos con estado 95. Estado actual: ${status}`);
+        return;
+    }
+
+    // Pedir confirmación final
+    const confirmar = confirm(`¿ENVIAR PEDIDO A SFTP?\n\nOrden: ${externorderkey}.txt\nEstado: ${status}\nLíneas: ${totalLineas}\n\n¿Continuar?`);
+    
+    if (!confirmar) {
+        mostrarIndicadorSFTP('info', 'Envío cancelado por el usuario');
+        return;
+    }
+
+    try {
+        // Mostrar indicador de inicio
+        mostrarIndicadorSFTP('info', `📤 Generando archivo ${externorderkey}.txt para SFTP...`);
+        
+        // Animación del botón
+        const btn = document.querySelector('#actionEnviarInterfaz .action-button');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        // 1. Generar contenido TXT - SÓLO ORDEN EXTERNA
+        const lines = [];
+        
+        // Procesar cada línea - SÓLO ORDEN EXTERNA
+        currentPedidoData.detalle_pedido.forEach(detalle => {
+            const fields = [
+                externorderkey,                    // Orden Externa
+                detalle.sku || '',                // SKU
+                detalle.orderlinenumber || '',    // # Línea (simple: 1, 2, 3...)
+                formatoDosDecimales(detalle.originalqty),
+                formatoDosDecimales(detalle.shippedqty),
+                formatearFechaTXT(detalle.actualshipdate),
+                detalle.id || ''                  // LPN (ID)
+            ];
+            lines.push(fields.join('|]'));
+        });
+        
+        const txtContent = lines.join('\n');
+        
+        // CAMBIO AQUÍ: Solo orden externa + .txt (sin fecha)
+        const nombreArchivo = `${externorderkey}.txt`;
+        
+        // 2. Enviar al servidor PHP (nuevo archivo)
+        mostrarIndicadorSFTP('info', '🔗 Conectando con servidor SFTP...');
+        
+        // Timeout de 60 segundos
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
+        
+        const response = await fetch('enviarsftp.php', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                contenido: txtContent,
+                nombre_archivo: nombreArchivo,
+                orden: externorderkey,
+                lineas: lines.length,
+                fecha: new Date().toISOString(),
+                usuario: 'sistema_despachos' // Puedes capturar usuario real
+            }),
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const resultado = await response.json();
+        
+        // Restaurar botón
+        btn.innerHTML = originalHTML;
+        
+        // 3. Procesar respuesta
+        if (resultado.success) {
+            // Mensaje detallado de éxito
+            const mensajeExito = `✅ ENVÍO SFTP EXITOSO\n\n📁 Archivo: ${nombreArchivo}\n📏 Tamaño: ${resultado.bytes || 0} bytes\n📍 Ruta: ${resultado.ruta || 'SFTP'}\n📅 Fecha: ${resultado.fecha || new Date().toLocaleString()}`;
+            mostrarIndicadorSFTP('success', mensajeExito, 15000);
+            
+            // Mostrar mensaje en el contenedor principal
+            mostrarMensaje('success', `Archivo ${nombreArchivo} enviado a SFTP`);
+            
+            // Registrar en historial localStorage
             try {
-                const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
-                const originalHTML = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                
-                const lines = [];
-                const externorderkey = currentPedidoData.informacion_pedido.externorderkey || '';
-                
-                currentPedidoData.detalle_pedido.forEach(detalle => {
-                    const fields = [
-                        externorderkey,
-                        detalle.sku || '',
-                        detalle.sku || '',
-                        detalle.orderlinenumber || '',
-                        formatoDosDecimales(detalle.originalqty),
-                        formatoDosDecimales(detalle.shippedqty),
-                        formatearFechaTXT(detalle.actualshipdate),
-                        detalle.id || ''
-                    ];
-                    lines.push(fields.join('|]'));
+                const historial = JSON.parse(localStorage.getItem('sftp_historial') || '[]');
+                historial.unshift({
+                    archivo: nombreArchivo,
+                    fecha: new Date().toISOString(),
+                    orden: externorderkey,
+                    lineas: lines.length,
+                    bytes: resultado.bytes || 0,
+                    exito: true,
+                    ruta: resultado.ruta,
+                    tipo: 'envio_sftp'
                 });
-                
-                const txtContent = lines.join('\n');
-                const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
-                const link = document.createElement('a');
-                const url = URL.createObjectURL(blob);
-                
-                link.href = url;
-                link.download = `LIRIS_${externorderkey}_${new Date().toISOString().slice(0,8)}.txt`;
-                document.body.appendChild(link);
-                link.click();
-                
-                setTimeout(() => {
-                    btn.innerHTML = originalHTML;
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                }, 100);
-                
-                mostrarMensaje('success', 'Archivo TXT descargado correctamente');
-                
-            } catch (error) {
-                console.error('Error generando TXT:', error);
-                mostrarMensaje('error', 'Error al generar archivo TXT');
-                
-                const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
-                btn.innerHTML = '<i class="fas fa-file-alt"></i>';
+                // Mantener solo los últimos 100 registros
+                localStorage.setItem('sftp_historial', JSON.stringify(historial.slice(0, 100)));
+            } catch (e) {
+                console.log('No se pudo guardar en historial:', e);
+            }
+            
+        } else {
+            // Mensaje de error
+            const mensajeError = `❌ ERROR DE ENVÍO SFTP\n\n${resultado.error || 'Error desconocido'}`;
+            mostrarIndicadorSFTP('error', mensajeError, 15000);
+            mostrarMensaje('error', resultado.error || 'Error al enviar a SFTP');
+            
+            // Registrar error en historial
+            try {
+                const historial = JSON.parse(localStorage.getItem('sftp_historial') || '[]');
+                historial.unshift({
+                    archivo: nombreArchivo,
+                    fecha: new Date().toISOString(),
+                    orden: externorderkey,
+                    lineas: lines.length,
+                    exito: false,
+                    error: resultado.error,
+                    tipo: 'envio_sftp'
+                });
+                localStorage.setItem('sftp_historial', JSON.stringify(historial.slice(0, 100)));
+            } catch (e) {
+                console.log('Error guardando historial:', e);
             }
         }
-
-        // ========== ENVIAR DATOS A INTERFAZ SFTP ==========
-        async function enviarDatosInterfaz() {
-            if (!currentPedidoData || !currentPedidoData.detalle_pedido) {
-                mostrarIndicadorSFTP('error', '❌ No hay datos para enviar');
-                return;
-            }
-
-            // Validar que status sea 95
-            const status = currentPedidoData.informacion_pedido.status;
-            const externorderkey = currentPedidoData.informacion_pedido.externorderkey || '';
-            const lineasConLPN = currentPedidoData.detalle_pedido.filter(d => d.id && d.id !== '').length;
-            const totalLineas = currentPedidoData.detalle_pedido.length;
-            
-            if (status !== '95') {
-                mostrarIndicadorSFTP('warning', `⚠️ Solo se pueden enviar pedidos con estado 95. Estado actual: ${status}`);
-                return;
-            }
-
-            // Validar que todas las líneas tengan LPN
-            if (lineasConLPN !== totalLineas) {
-                const confirmar = confirm(`⚠️ ADVERTENCIA: ${totalLineas - lineasConLPN} líneas NO tienen LPN\n\n¿Desea continuar con el envío?`);
-                if (!confirmar) {
-                    mostrarIndicadorSFTP('info', 'Envío cancelado por falta de LPN');
-                    return;
-                }
-            }
-
-            // Pedir confirmación final
-            const confirmar = confirm(`¿ENVIAR PEDIDO A SFTP?\n\nOrden: ${externorderkey}\nEstado: ${status}\nLíneas: ${totalLineas}\nCon LPN: ${lineasConLPN}\n\n¿Continuar?`);
-            
-            if (!confirmar) {
-                mostrarIndicadorSFTP('info', 'Envío cancelado por el usuario');
-                return;
-            }
-
-            try {
-                // Mostrar indicador de inicio
-                mostrarIndicadorSFTP('info', '📤 Generando archivo TXT para SFTP...');
-                
-                // Animación del botón
-                const btn = document.querySelector('#actionEnviarInterfaz .action-button');
-                const originalHTML = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                
-                // 1. Generar contenido TXT (igual que en descargarTXT)
-                const lines = [];
-                const fechaActual = new Date();
-                const fechaFormato = fechaActual.toISOString().slice(0,8).replace(/-/g, '');
-                
-                // Procesar cada línea - MISMO FORMATO QUE DESCARGA TXT
-                currentPedidoData.detalle_pedido.forEach(detalle => {
-                    const fields = [
-                        externorderkey,
-                        detalle.sku || '',
-                        detalle.sku || '', // Campo duplicado según ejemplo
-                        detalle.orderlinenumber || '',
-                        formatoDosDecimales(detalle.originalqty),
-                        formatoDosDecimales(detalle.shippedqty),
-                        formatearFechaTXT(detalle.actualshipdate),
-                        detalle.id || ''
-                    ];
-                    lines.push(fields.join('|]'));
-                });
-                
-                const txtContent = lines.join('\n');
-                const nombreArchivo = `LIRIS_${externorderkey}_${fechaFormato}.txt`;
-                
-                // 2. Enviar al servidor PHP (nuevo archivo)
-                mostrarIndicadorSFTP('info', '🔗 Conectando con servidor SFTP...');
-                
-                // Timeout de 60 segundos
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 60000);
-                
-                const response = await fetch('enviarsftp.php', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify({
-                        contenido: txtContent,
-                        nombre_archivo: nombreArchivo,
-                        orden: externorderkey,
-                        lineas: lines.length,
-                        fecha: fechaActual.toISOString(),
-                        usuario: 'sistema_despachos' // Puedes capturar usuario real
-                    }),
-                    signal: controller.signal
-                });
-                
-                clearTimeout(timeoutId);
-                
-                if (!response.ok) {
-                    throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const resultado = await response.json();
-                
-                // Restaurar botón
-                btn.innerHTML = originalHTML;
-                
-                // 3. Procesar respuesta
-                if (resultado.success) {
-                    // Mensaje detallado de éxito
-                    const mensajeExito = `✅ ENVÍO SFTP EXITOSO\n\n📁 Archivo: ${resultado.archivo}\n📏 Tamaño: ${resultado.bytes || 0} bytes\n📍 Ruta: ${resultado.ruta || 'SFTP'}\n📅 Fecha: ${resultado.fecha || new Date().toLocaleString()}`;
-                    mostrarIndicadorSFTP('success', mensajeExito, 15000);
-                    
-                    // Mostrar mensaje en el contenedor principal
-                    mostrarMensaje('success', `Archivo enviado a SFTP: ${resultado.archivo}`);
-                    
-                    // Registrar en historial localStorage
-                    try {
-                        const historial = JSON.parse(localStorage.getItem('sftp_historial') || '[]');
-                        historial.unshift({
-                            archivo: nombreArchivo,
-                            fecha: fechaActual.toISOString(),
-                            orden: externorderkey,
-                            lineas: lines.length,
-                            bytes: resultado.bytes || 0,
-                            exito: true,
-                            ruta: resultado.ruta,
-                            tipo: 'envio_sftp'
-                        });
-                        // Mantener solo los últimos 100 registros
-                        localStorage.setItem('sftp_historial', JSON.stringify(historial.slice(0, 100)));
-                    } catch (e) {
-                        console.log('No se pudo guardar en historial:', e);
-                    }
-                    
-                } else {
-                    // Mensaje de error
-                    const mensajeError = `❌ ERROR DE ENVÍO SFTP\n\n${resultado.error || 'Error desconocido'}`;
-                    mostrarIndicadorSFTP('error', mensajeError, 15000);
-                    mostrarMensaje('error', resultado.error || 'Error al enviar a SFTP');
-                    
-                    // Registrar error en historial
-                    try {
-                        const historial = JSON.parse(localStorage.getItem('sftp_historial') || '[]');
-                        historial.unshift({
-                            archivo: nombreArchivo,
-                            fecha: fechaActual.toISOString(),
-                            orden: externorderkey,
-                            lineas: lines.length,
-                            exito: false,
-                            error: resultado.error,
-                            tipo: 'envio_sftp'
-                        });
-                        localStorage.setItem('sftp_historial', JSON.stringify(historial.slice(0, 100)));
-                    } catch (e) {
-                        console.log('Error guardando historial:', e);
-                    }
-                }
-                
-            } catch (error) {
-                console.error('Error enviando datos a SFTP:', error);
-                
-                // Restaurar botón
-                const btn = document.querySelector('#actionEnviarInterfaz .action-button');
-                btn.innerHTML = '<i class="fas fa-paper-plane"></i>';
-                
-                // Mostrar error
-                let mensajeError = `❌ ERROR DE CONEXIÓN SFTP`;
-                if (error.name === 'AbortError') {
-                    mensajeError += '\n⏰ Timeout excedido (60 segundos)';
-                } else {
-                    mensajeError += `\n${error.message}`;
-                }
-                
-                mostrarIndicadorSFTP('error', mensajeError, 15000);
-                mostrarMensaje('error', error.message || 'Error de conexión con el servidor SFTP');
-            }
+        
+    } catch (error) {
+        console.error('Error enviando datos a SFTP:', error);
+        
+        // Restaurar botón
+        const btn = document.querySelector('#actionEnviarInterfaz .action-button');
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+        
+        // Mostrar error
+        let mensajeError = `❌ ERROR DE CONEXIÓN SFTP`;
+        if (error.name === 'AbortError') {
+            mensajeError += '\n⏰ Timeout excedido (60 segundos)';
+        } else {
+            mensajeError += `\n${error.message}`;
         }
+        
+        mostrarIndicadorSFTP('error', mensajeError, 15000);
+        mostrarMensaje('error', error.message || 'Error de conexión con el servidor SFTP');
+    }
+}
+
+
+
+
 
         // ========== FUNCIONES DE INTERFAZ ==========
         function mostrarMensaje(tipo, mensaje, duracion = 3000) {
@@ -1799,7 +1811,7 @@
                 return;
             }
             
-            detalles.sort((a, b) => a.orderlinenumber.localeCompare(b.orderlinenumber));
+            detalles.sort((a, b) => (parseInt(a.orderlinenumber) || 0) - (parseInt(b.orderlinenumber) || 0));
             
             tbody.innerHTML = detalles.map(detalle => {
                 const claseLpn = determinarClaseLPN(detalle.id);
@@ -1808,9 +1820,12 @@
                 const claseFila = conProblemas ? 'con-problemas' : '';
                 const claseQty = coinciden ? '' : 'diferencia';
                 
+                // Número de línea simple (1, 2, 3...)
+                const numeroLinea = parseInt(detalle.orderlinenumber) || detalle.orderlinenumber;
+                
                 return `
                     <tr class="${claseFila}">
-                        <td class="orderlinenumber">${detalle.orderlinenumber || 'N/A'}</td>
+                        <td class="orderlinenumber">${numeroLinea}</td>
                         <td class="externorderkey">${detalle.externorderkey || 'N/A'}</td>
                         <td class="sku">${detalle.sku || 'N/A'}</td>
                         <td class="externlineno">${detalle.externlineno || 'N/A'}</td>
@@ -1819,7 +1834,7 @@
                             ${detalle.shippedqty || '0'}
                         </td>
                         <td class="id-lpn ${claseLpn}">
-                            ${detalle.id || 'Sin LPN'}
+                            ${detalle.id || ''}
                         </td>
                         <td class="actualshipdate">${detalle.actualshipdate || 'N/A'}</td>
                     </tr>
@@ -1941,6 +1956,12 @@
                 
                 if (data.informacion_pedido && data.detalle_pedido) {
                     mostrarResultados(data.informacion_pedido, data.detalle_pedido);
+                    
+                    // Mostrar información sobre LPN predeterminado
+                    if (data.informacion_pedido.lineas_con_lpn_predeterminado > 0) {
+                        const infoMsg = `${data.informacion_pedido.lineas_con_lpn_predeterminado} líneas recibieron LPN predeterminado: DP00000000572181`;
+                        mostrarIndicadorSFTP('info', infoMsg, 8000);
+                    }
                 }
                 
             } catch (error) {

@@ -9,6 +9,7 @@ define('MAX_REQUESTS_PER_MINUTE', 5); // Máximo 5 consultas por minuto por IP
 define('REQUEST_TIMEOUT_SECONDS', 30); // Timeout para llamadas API
 define('API_WAIT_SECONDS', 10); // Espera mínima de 10 segundos entre consultas
 define('TOKEN_CACHE_TIME', 300); // Cachear token por 5 minutos (300 segundos)
+define('LPN_PREDETERMINADO', 'DP00000000572181'); // LPN predeterminado para líneas sin LPN
 
 // ---------- FUNCIONES DE SEGURIDAD Y CONTROL ----------
 
@@ -337,6 +338,7 @@ try {
     // ---------- PROCESAR orderdetails ----------
     $detallesOrden = [];
     $lineasProcesadas = 0;
+    $lineaNumero = 1; // Iniciar contador para # Línea
     
     if (isset($datosInfor['orderdetails']) && is_array($datosInfor['orderdetails'])) {
         foreach ($datosInfor['orderdetails'] as $detalle) {
@@ -351,18 +353,23 @@ try {
             $originalqty = $detalle['originalqty'] ?? 0;
             $shippedqty = $detalle['shippedqty'] ?? 0;
             
-            $detallesOrden[$orderlinenumber] = [
-                "orderlinenumber" => $orderlinenumber,
+            // Usar número de línea secuencial (1, 2, 3...)
+            $numeroLineaSecuencial = $lineaNumero;
+            
+            $detallesOrden[$numeroLineaSecuencial] = [
+                "orderlinenumber" => $numeroLineaSecuencial, // Usar número secuencial
                 "externorderkey" => $externorderkey,
                 "sku" => $sku,
                 "externlineno" => $externlineno,
                 "originalqty" => $originalqty,
                 "shippedqty" => $shippedqty,
                 "actualshipdate" => isset($detalle['actualshipdate']) ? formatearFechaInfor($detalle['actualshipdate']) : '',
-                "id" => ""
+                "id" => "", // Inicialmente vacío
+                "orderlinenumber_original" => $orderlinenumber // Guardar original para consulta
             ];
             
             $lineasProcesadas++;
+            $lineaNumero++;
         }
     }
     
@@ -387,9 +394,13 @@ try {
                     $id = $item['id'] ?? '';
                     
                     if (!empty($id) && $id !== ' ' && $id !== '  ') {
-                        if (isset($detallesOrden[$orderlinenumber])) {
-                            $detallesOrden[$orderlinenumber]['id'] = $id;
-                            $idsEncontrados++;
+                        // Buscar en los detalles por el orderlinenumber original
+                        foreach ($detallesOrden as $key => $detalle) {
+                            if ($detalle['orderlinenumber_original'] == $orderlinenumber) {
+                                $detallesOrden[$key]['id'] = $id;
+                                $idsEncontrados++;
+                                break;
+                            }
                         }
                     }
                 }
@@ -397,15 +408,24 @@ try {
         }
     }
     
+    // ---------- APLICAR LPN PREDETERMINADO A LÍNEAS SIN LPN ----------
+    $lineasConLPNPredeterminado = 0;
+    foreach ($detallesOrden as $key => $detalle) {
+        if (empty($detalle['id'])) {
+            $detallesOrden[$key]['id'] = LPN_PREDETERMINADO;
+            $lineasConLPNPredeterminado++;
+        }
+    }
+    
     // ---------- PREPARAR DETALLES FINALES ----------
     $detallesFinal = [];
-    foreach ($detallesOrden as $orderlinenumber => $detalle) {
+    foreach ($detallesOrden as $numeroLineaSecuencial => $detalle) {
         if (empty($detalle['sku']) || empty($detalle['externlineno'])) {
             continue;
         }
         
         $detallesFinal[] = [
-            "orderlinenumber" => $detalle['orderlinenumber'],
+            "orderlinenumber" => $detalle['orderlinenumber'], // Número secuencial (1, 2, 3...)
             "externorderkey" => $detalle['externorderkey'],
             "sku" => $detalle['sku'],
             "externlineno" => $detalle['externlineno'],
@@ -428,7 +448,8 @@ try {
             "ccity" => $datosInfor['ccity'] ?? '',
             "type" => $datosInfor['type'] ?? '',
             "total_lineas" => $lineasProcesadas,
-            "lineas_con_id" => $idsEncontrados
+            "lineas_con_id" => $idsEncontrados,
+            "lineas_con_lpn_predeterminado" => $lineasConLPNPredeterminado
         ],
         'detalle_pedido' => $detallesFinal,
         'error' => null
