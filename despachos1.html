@@ -1441,7 +1441,7 @@
         }
 
         // ========== DESCARGAR TXT (FILTRANDO LÍNEAS CON SHIPPEDQTY = 0) ==========
-        function descargarTXT() {
+        /*function descargarTXT() {
             if (!currentPedidoData || !currentPedidoData.detalle_pedido) {
                 mostrarMensaje('error', 'No hay datos para exportar');
                 return;
@@ -1752,7 +1752,322 @@
                 mostrarIndicadorSFTP('error', mensajeError, 15000);
                 mostrarMensaje('error', error.message || 'Error de conexión con el servidor SFTP');
             }
+        }*/
+        // ========== DESCARGAR TXT (CON SKU REPETIDO) ==========
+function descargarTXT() {
+    if (!currentPedidoData || !currentPedidoData.detalle_pedido) {
+        mostrarMensaje('error', 'No hay datos para exportar');
+        return;
+    }
+
+    try {
+        const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        const lines = [];
+        const externorderkey = currentPedidoData.informacion_pedido.externorderkey || '';
+        
+        // Validar que tenemos orden externa
+        if (!externorderkey) {
+            mostrarMensaje('error', 'No se encontró orden externa para exportar');
+            btn.innerHTML = originalHTML;
+            return;
         }
+        
+        // Contadores para estadísticas
+        let totalLineas = currentPedidoData.detalle_pedido.length;
+        let lineasFiltradas = 0;
+        let lineasIncluidas = 0;
+        
+        currentPedidoData.detalle_pedido.forEach(detalle => {
+            // FILTRAR: Si shippedqty es 0.00, saltar esta línea
+            const shippedqty = parseFloat(detalle.shippedqty) || 0;
+            
+            if (shippedqty === 0) {
+                lineasFiltradas++;
+                return; // Saltar esta línea
+            }
+            
+            // Incluir línea (solo si shippedqty > 0)
+            lineasIncluidas++;
+            const fields = [
+                externorderkey,                    // Orden Externa
+                detalle.sku || '',                // SKU (primera vez)
+                detalle.sku || '',                // SKU (segunda vez - REPETIDO)
+                detalle.orderlinenumber || '',    // # Línea (simple: 1, 2, 3...)
+                formatoDosDecimales(detalle.originalqty),
+                formatoDosDecimales(detalle.shippedqty),
+                formatearFechaTXT(detalle.actualshipdate),
+                detalle.id || ''                  // LPN (ID)
+            ];
+            lines.push(fields.join('|]'));
+        });
+        
+        // Validar si quedaron líneas después del filtro
+        if (lines.length === 0) {
+            mostrarMensaje('warning', 'No hay líneas con cantidad enviada mayor a 0.00');
+            btn.innerHTML = originalHTML;
+            return;
+        }
+        
+        const txtContent = lines.join('\n');
+        const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.href = url;
+        link.download = `${externorderkey}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+        // Mostrar estadísticas del filtro
+        mostrarMensaje('success', 
+            `Archivo ${externorderkey}.txt descargado (${lineasIncluidas} líneas incluidas, ${lineasFiltradas} filtradas por cantidad 0.00)`
+        );
+        
+    } catch (error) {
+        console.error('Error generando TXT:', error);
+        mostrarMensaje('error', 'Error al generar archivo TXT');
+        
+        const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
+        btn.innerHTML = '<i class="fas fa-file-alt"></i>';
+    }
+}
+
+// ========== ENVIAR DATOS A INTERFAZ SFTP (CON SKU REPETIDO) ==========
+async function enviarDatosInterfaz() {
+    if (!currentPedidoData || !currentPedidoData.detalle_pedido) {
+        mostrarIndicadorSFTP('error', '❌ No hay datos para enviar');
+        return;
+    }
+
+    // Validar que status sea 95
+    const status = currentPedidoData.informacion_pedido.status;
+    const externorderkey = currentPedidoData.informacion_pedido.externorderkey || '';
+    
+    // Validar que tenemos orden externa
+    if (!externorderkey) {
+        mostrarIndicadorSFTP('error', '❌ No se encontró orden externa para enviar');
+        return;
+    }
+    
+    if (status !== '95') {
+        mostrarIndicadorSFTP('warning', `⚠️ Solo se pueden enviar pedidos con estado 95. Estado actual: ${status}`);
+        return;
+    }
+
+    // Calcular estadísticas ANTES de pedir confirmación
+    let totalLineas = currentPedidoData.detalle_pedido.length;
+    let lineasConEnvio = 0;
+    let lineasSinEnvio = 0;
+    
+    currentPedidoData.detalle_pedido.forEach(detalle => {
+        const shippedqty = parseFloat(detalle.shippedqty) || 0;
+        if (shippedqty === 0) {
+            lineasSinEnvio++;
+        } else {
+            lineasConEnvio++;
+        }
+    });
+    
+    // Pedir confirmación con información del filtro
+    const confirmar = confirm(
+        `¿ENVIAR PEDIDO A SFTP?\n\n` +
+        `Orden: ${externorderkey}.txt\n` +
+        `Estado: ${status}\n` +
+        `Total líneas: ${totalLineas}\n` +
+        `Líneas con envío > 0: ${lineasConEnvio}\n` +
+        `Líneas filtradas (envío = 0): ${lineasSinEnvio}\n\n` +
+        `¿Continuar con el envío?`
+    );
+    
+    if (!confirmar) {
+        mostrarIndicadorSFTP('info', 'Envío cancelado por el usuario');
+        return;
+    }
+
+    try {
+        // Mostrar indicador de inicio
+        mostrarIndicadorSFTP('info', `📤 Generando archivo ${externorderkey}.txt para SFTP...`);
+        
+        // Animación del botón
+        const btn = document.querySelector('#actionEnviarInterfaz .action-button');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        // 1. Generar contenido TXT - FILTRANDO LÍNEAS CON SHIPPEDQTY = 0
+        const lines = [];
+        let lineasIncluidasEnArchivo = 0;
+        
+        // Procesar cada línea - FILTRAR LAS QUE TIENEN SHIPPEDQTY = 0
+        currentPedidoData.detalle_pedido.forEach(detalle => {
+            const shippedqty = parseFloat(detalle.shippedqty) || 0;
+            
+            // FILTRAR: Si shippedqty es 0.00, saltar esta línea
+            if (shippedqty === 0) {
+                return; // Saltar esta línea
+            }
+            
+            // Incluir línea (solo si shippedqty > 0)
+            lineasIncluidasEnArchivo++;
+            const fields = [
+                externorderkey,                    // Orden Externa
+                detalle.sku || '',                // SKU (primera vez)
+                detalle.sku || '',                // SKU (segunda vez - REPETIDO)
+                detalle.orderlinenumber || '',    // # Línea (simple: 1, 2, 3...)
+                formatoDosDecimales(detalle.originalqty),
+                formatoDosDecimales(detalle.shippedqty),
+                formatearFechaTXT(detalle.actualshipdate),
+                detalle.id || ''                  // LPN (ID)
+            ];
+            lines.push(fields.join('|]'));
+        });
+        
+        // Validar si quedaron líneas después del filtro
+        if (lines.length === 0) {
+            mostrarIndicadorSFTP('warning', 
+                `⚠️ No hay líneas con cantidad enviada mayor a 0.00\n` +
+                `No se generará archivo para SFTP`
+            );
+            btn.innerHTML = originalHTML;
+            return;
+        }
+        
+        const txtContent = lines.join('\n');
+        
+        // Nombre del archivo
+        const nombreArchivo = `${externorderkey}.txt`;
+        
+        // 2. Enviar al servidor PHP
+        mostrarIndicadorSFTP('info', `🔗 Conectando con servidor SFTP (${lineasIncluidasEnArchivo} líneas)...`);
+        
+        // Timeout de 60 segundos
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
+        
+        const response = await fetch('enviarsftp.php', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                contenido: txtContent,
+                nombre_archivo: nombreArchivo,
+                orden: externorderkey,
+                lineas: lines.length,
+                fecha: new Date().toISOString(),
+                usuario: 'sistema_despachos',
+                lineas_filtradas: lineasSinEnvio,
+                lineas_incluidas: lineasIncluidasEnArchivo
+            }),
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const resultado = await response.json();
+        
+        // Restaurar botón
+        btn.innerHTML = originalHTML;
+        
+        // 3. Procesar respuesta
+        if (resultado.success) {
+            // Mensaje detallado de éxito con estadísticas del filtro
+            const mensajeExito = 
+                `✅ ENVÍO SFTP EXITOSO\n\n` +
+                `📁 Archivo: ${nombreArchivo}\n` +
+                `📏 Tamaño: ${resultado.bytes || 0} bytes\n` +
+                `📍 Ruta: ${resultado.ruta || 'SFTP'}\n` +
+                `📅 Fecha: ${resultado.fecha || new Date().toLocaleString()}\n` +
+                `📊 Estadísticas: ${lineasIncluidasEnArchivo} líneas incluidas, ${lineasSinEnvio} filtradas (envío = 0.00)`;
+            
+            mostrarIndicadorSFTP('success', mensajeExito, 15000);
+            
+            // Mostrar mensaje en el contenedor principal
+            mostrarMensaje('success', 
+                `Archivo ${nombreArchivo} enviado a SFTP (${lineasIncluidasEnArchivo} líneas incluidas, ${lineasSinEnvio} filtradas)`
+            );
+            
+            // Registrar en historial localStorage
+            try {
+                const historial = JSON.parse(localStorage.getItem('sftp_historial') || '[]');
+                historial.unshift({
+                    archivo: nombreArchivo,
+                    fecha: new Date().toISOString(),
+                    orden: externorderkey,
+                    lineas_totales: totalLineas,
+                    lineas_enviadas: lineasIncluidasEnArchivo,
+                    lineas_filtradas: lineasSinEnvio,
+                    bytes: resultado.bytes || 0,
+                    exito: true,
+                    ruta: resultado.ruta,
+                    tipo: 'envio_sftp',
+                    filtro_ceros: true
+                });
+                // Mantener solo los últimos 100 registros
+                localStorage.setItem('sftp_historial', JSON.stringify(historial.slice(0, 100)));
+            } catch (e) {
+                console.log('No se pudo guardar en historial:', e);
+            }
+            
+        } else {
+            // Mensaje de error
+            const mensajeError = `❌ ERROR DE ENVÍO SFTP\n\n${resultado.error || 'Error desconocido'}`;
+            mostrarIndicadorSFTP('error', mensajeError, 15000);
+            mostrarMensaje('error', resultado.error || 'Error al enviar a SFTP');
+            
+            // Registrar error en historial
+            try {
+                const historial = JSON.parse(localStorage.getItem('sftp_historial') || '[]');
+                historial.unshift({
+                    archivo: nombreArchivo,
+                    fecha: new Date().toISOString(),
+                    orden: externorderkey,
+                    lineas_totales: totalLineas,
+                    lineas_enviadas: lineasIncluidasEnArchivo,
+                    lineas_filtradas: lineasSinEnvio,
+                    exito: false,
+                    error: resultado.error,
+                    tipo: 'envio_sftp',
+                    filtro_ceros: true
+                });
+                localStorage.setItem('sftp_historial', JSON.stringify(historial.slice(0, 100)));
+            } catch (e) {
+                console.log('Error guardando historial:', e);
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error enviando datos a SFTP:', error);
+        
+        // Restaurar botón
+        const btn = document.querySelector('#actionEnviarInterfaz .action-button');
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+        
+        // Mostrar error
+        let mensajeError = `❌ ERROR DE CONEXIÓN SFTP`;
+        if (error.name === 'AbortError') {
+            mensajeError += '\n⏰ Timeout excedido (60 segundos)';
+        } else {
+            mensajeError += `\n${error.message}`;
+        }
+        
+        mostrarIndicadorSFTP('error', mensajeError, 15000);
+        mostrarMensaje('error', error.message || 'Error de conexión con el servidor SFTP');
+    }
+}
 
         // ========== FUNCIONES DE INTERFAZ ==========
         function mostrarMensaje(tipo, mensaje, duracion = 3000) {

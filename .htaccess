@@ -1,0 +1,28 @@
+# Desactivar listado de directorios
+Options -Indexes
+
+# Activar rewrite
+RewriteEngine On
+
+# Prevenir acceso a archivos sensibles
+<FilesMatch "\.(htaccess|htpasswd|ini|log|sh|sql|bak)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# REDIRECCIONES PARA OCULTAR .html
+
+# Capturar cualquier petición que contenga .html
+RewriteCond %{THE_REQUEST} \.html [NC]
+RewriteRule ^ /sftp-liris/main [R=302,L]
+
+# Internamente, main.html responde a /main
+RewriteRule ^main$ main.html [L]
+
+# Redirigir la raíz a main
+RewriteRule ^$ main [R=302,L]
+
+# Bloquear listado de directorios
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteCond %{REQUEST_URI} /$
+RewriteRule ^ - [R=404,L]
