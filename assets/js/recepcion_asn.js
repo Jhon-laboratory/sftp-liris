@@ -949,6 +949,65 @@ async function buscarRecepcion() {
         mostrarMensaje('error', `Error: ${error.message}`);
     }
 }
+async function registrarAuditoria(accion, resultado, detalles = '') {
+    console.log('📝 Intentando registrar auditoría:', { accion, resultado, detalles });
+    
+    const numeroRecepcion = document.getElementById('numeroRecepcion')?.value || 
+                            currentRecepcionData?.informacion_recepcion?.externreceiptkey || '';
+    
+    console.log('🔍 Número de recepción:', numeroRecepcion);
+    
+    if (!numeroRecepcion) {
+        console.log('⚠️ No hay recepción para auditar');
+        return;
+    }
+    
+    const data = {
+        accion: accion,
+        modulo: 'RECEPCION',
+        valor_buscado: numeroRecepcion,
+        numero_orden: numeroRecepcion,
+        resultado: resultado,
+        detalles: detalles
+    };
+    
+    console.log('📤 Enviando datos:', data);
+    
+    try {
+        const response = await fetch('../controller/guardar_auditoria.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        console.log('📥 Respuesta status:', response.status);
+        
+        // Obtener el texto de la respuesta primero
+        const textResponse = await response.text();
+        console.log('📥 Respuesta texto:', textResponse.substring(0, 500)); // Primeros 500 caracteres
+        
+        // Intentar parsear como JSON
+        try {
+            const result = JSON.parse(textResponse);
+            console.log('📥 Respuesta JSON:', result);
+            
+            if (!result.success) {
+                console.error('❌ Error registrando auditoría:', result.error);
+            } else {
+                console.log('✅ Auditoría registrada exitosamente');
+            }
+        } catch (jsonError) {
+            console.error('❌ La respuesta NO es JSON válido:', jsonError);
+            console.error('Contenido de la respuesta:', textResponse);
+            
+            // Mostrar alerta con el error para que lo veas
+            alert('Error en auditoría - Revisa consola para detalles');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en fetch:', error);
+    }
+}
 
 // ========== INICIALIZACIÓN ==========
 document.addEventListener('DOMContentLoaded', function() {
