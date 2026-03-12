@@ -41,7 +41,7 @@
                     <div class="option-icon">
                         <i class="fas fa-shopping-cart"></i>
                     </div>
-                    <h2 class="option-title">Órdenes de Compra</h2>
+                    <h2 class="option-title">Recepciones/ASN</h2>
                     <p class="option-description">
                         Consulta y gestión de órdenes de compra del sistema LIRIS
                     </p>
@@ -63,9 +63,9 @@
         <!-- Pie de página -->
         <div class="footer animate-in delay-2">
             <p><i class="fas fa-shield-alt"></i> Sistema seguro y confiable <i class="fas fa-lock"></i></p>
-            <p>Sistema LIRIS &copy; 2024 - Todos los derechos reservados</p>
+            <p>Sistema RANSA &copy; 2026 - Todos los derechos reservados</p>
             <p style="font-size: 12px; margin-top: 8px; color: #95a5a6;">
-                <i class="fas fa-info-circle"></i> Versión 2.0 | Última actualización: Diciembre 2024
+                <i class="fas fa-info-circle"></i> Versión 2.0 | Última actualización: Marzo 2026
             </p>
         </div>
     </div>
