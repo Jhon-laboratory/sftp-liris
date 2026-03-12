@@ -40,7 +40,7 @@ echo "</pre>";
 
 // Verificar archivo de conexión
 echo "<h2>📁 Verificando Archivo de Conexión</h2>";
-$ruta_conexion = dirname(__DIR__) . '/Conexion/conexion_mysqli.php';
+$ruta_conexion = dirname(__DIR__) . '/conexion/conexion_mysqli.php';
 echo "Buscando en: " . $ruta_conexion . "<br>";
 
 if (file_exists($ruta_conexion)) {

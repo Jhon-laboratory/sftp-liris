@@ -1,5 +1,5 @@
 <?php
-require_once '../Conexion/conexion_mysqli.php';
+require_once '../conexion/conexion_mysqli.php';
 
 class Auditoria {
     private $conn;
