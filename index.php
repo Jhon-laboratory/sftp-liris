@@ -20,10 +20,10 @@
                      class="logo" 
                      alt="Logo Servientrega"
                      loading="lazy">
-                <img src="https://crepier.com.ec/media/logo/default/LOGO-WEB.png" 
-                     class="logo" 
-                     alt="Logo Cliente"
-                     loading="lazy">
+                <!-- <img src="https://crepier.com.ec/media/logo/default/LOGO-WEB.png"  -->
+                 <!--     class="logo" -->
+                <!--      alt="Logo Cliente"-->
+                 <!--     loading="lazy">-->
             </div>
             
             <div class="title-section">
