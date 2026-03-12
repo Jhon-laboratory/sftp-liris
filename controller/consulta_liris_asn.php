@@ -9,7 +9,10 @@ define('MAX_REQUESTS_PER_MINUTE', 5);
 define('REQUEST_TIMEOUT_SECONDS', 30);
 define('API_WAIT_SECONDS', 10);
 define('TOKEN_CACHE_TIME', 300);
-define('DIAS_VENCIMIENTO_MAXIMO', 15); // Días máximos para vencimiento
+
+// 🔴 CAMBIO IMPORTANTE: Nuevas constantes para validación de fechas
+define('DIAS_VENCIMIENTO_MINIMO', 30);   // Mínimo 30 días desde hoy
+define('DIAS_VENCIMIENTO_MAXIMO', 3285); // Máximo 9 años (365 * 9)
 
 // ---------- FUNCIONES DE SEGURIDAD Y CONTROL ----------
 
@@ -231,7 +234,7 @@ function formatearPrecio($precioStr) {
     return number_format($precioFloat, 2, '.', '');
 }
 
-// Verificar si la fecha de vencimiento es válida (no mayor a 15 días desde hoy)
+// 🔴 FUNCIÓN MODIFICADA: Validar fecha de vencimiento (30 días - 9 años)
 function verificarVencimientoValido($fechaStr) {
     if(!$fechaStr || $fechaStr === 'N/A') return false;
     
@@ -258,17 +261,39 @@ function verificarVencimientoValido($fechaStr) {
             return false;
         }
         
-        // Fecha actual
+        // Fecha actual (hoy a las 00:00:00)
         $fechaActual = new DateTime();
+        $fechaActual->setTime(0, 0, 0);
+        $fechaVencimiento->setTime(0, 0, 0);
         
         // Calcular diferencia en días
         $diferencia = $fechaActual->diff($fechaVencimiento);
-        $diasDiferencia = (int)$diferencia->format('%r%a'); // %r para signo
+        $diasDiferencia = (int)$diferencia->format('%r%a'); // %r para signo (+ o -)
         
-        // Si la fecha de vencimiento es en el pasado (días negativos) o mayor a 15 días en el futuro
-        return ($diasDiferencia >= 0 && $diasDiferencia <= DIAS_VENCIMIENTO_MAXIMO);
+        // ✅ REGLA DE NEGOCIO CORREGIDA:
+        // - Mínimo 30 días desde hoy (diasDiferencia >= 30)
+        // - Máximo 9 años (diasDiferencia <= 3285)
+        
+        // Si la fecha ya pasó (días negativos), es inválida
+        if ($diasDiferencia < 0) {
+            return false;
+        }
+        
+        if ($diasDiferencia < DIAS_VENCIMIENTO_MINIMO) {
+            // Fecha muy cercana (menos de 30 días)
+            return false;
+        }
+        
+        if ($diasDiferencia > DIAS_VENCIMIENTO_MAXIMO) {
+            // Fecha muy lejana (más de 9 años)
+            return false;
+        }
+        
+        // Si pasa ambas validaciones, es válida
+        return true;
         
     } catch (Exception $e) {
+        error_log("Error validando fecha: " . $e->getMessage());
         return false;
     }
 }
@@ -276,8 +301,12 @@ function verificarVencimientoValido($fechaStr) {
 // Función para obtener texto del estado
 function obtenerTextoEstado($status) {
     $estados = [
+        '0'  => 'Pendiente',
+        '10' => 'Recibiendo',
         '11' => 'Cerrado',
-        '15' => 'Verificado y cerrado'
+        '12' => 'Cerrado Parcial',
+        '15' => 'Verificado y cerrado',
+        '20' => 'Anulado'
     ];
     
     return $estados[$status] ?? "Estado $status";
@@ -411,10 +440,10 @@ try {
         exit;
     }
     
-    if (!in_array($status, ['11', '15'])) {
-        $textoEstado = obtenerTextoEstado($status);
-        echo json_encode(["error" => "La recepción no tiene un estado válido para consulta. Estado: $textoEstado"]);
-        exit;
+    // ✅ PERMITIR CUALQUIER ESTADO - Solo registramos para información
+    $estados_permitidos = ['11', '15']; // Solo para referencia
+    if (!in_array($status, $estados_permitidos)) {
+        error_log("Consulta recepción en estado no verificado: $status - Recepción: $receiptkey");
     }
     
     // ---------- PROCESAR DETALLES ----------
@@ -440,46 +469,40 @@ try {
             $tolot = $detalle['tolot'] ?? '';
             $lottable09 = $detalle['lottable09'] ?? ''; // PRECIO
             
-            // Usar el externlineno tal como viene de la API (ej: "0000446")
-            // Luego lo limpiaremos cuando presentemos los datos
+            // Usar el externlineno tal como viene de la API
             $externlinenoOriginal = $externlineno;
             
             // Consolidar por externlineno
             if (!isset($lineasConsolidadas[$externlinenoOriginal])) {
-                // Primera vez que vemos esta línea externa
                 $lineasConsolidadas[$externlinenoOriginal] = [
                     'receiptlinenumbers' => [$receiptlinenumber],
                     'receiptkey' => $receiptkey,
                     'externreceiptkey' => $externreceiptkey,
                     'sku' => $sku,
-                    'externlineno' => $externlinenoOriginal, // Guardamos el original
+                    'externlineno' => $externlinenoOriginal,
                     'qtyexpected' => $qtyexpected,
                     'qtyreceived' => $qtyreceived,
                     'lottable05' => $lottable05,
                     'tolot' => $tolot,
-                    'lottable09' => $lottable09, // PRECIO
+                    'lottable09' => $lottable09,
                     'count' => 1
                 ];
             } else {
-                // Ya existe esta línea externa, sumar cantidades
                 $lineasConsolidadas[$externlinenoOriginal]['qtyexpected'] += $qtyexpected;
                 $lineasConsolidadas[$externlinenoOriginal]['qtyreceived'] += $qtyreceived;
                 $lineasConsolidadas[$externlinenoOriginal]['receiptlinenumbers'][] = $receiptlinenumber;
                 $lineasConsolidadas[$externlinenoOriginal]['count']++;
                 
-                // Tomar el lottable05 del registro que tenga valor (si el actual es vacío/null)
                 if ((empty($lineasConsolidadas[$externlinenoOriginal]['lottable05']) || $lineasConsolidadas[$externlinenoOriginal]['lottable05'] === 'N/A') 
                     && (!empty($lottable05) && $lottable05 !== 'N/A')) {
                     $lineasConsolidadas[$externlinenoOriginal]['lottable05'] = $lottable05;
                 }
                 
-                // Tomar el tolot del registro que tenga valor (si el actual es vacío/null)
                 if ((empty($lineasConsolidadas[$externlinenoOriginal]['tolot']) || $lineasConsolidadas[$externlinenoOriginal]['tolot'] === 'N/A') 
                     && (!empty($tolot) && $tolot !== 'N/A')) {
                     $lineasConsolidadas[$externlinenoOriginal]['tolot'] = $tolot;
                 }
                 
-                // Tomar el precio (lottable09) del registro que tenga valor (si el actual es vacío/null)
                 if ((empty($lineasConsolidadas[$externlinenoOriginal]['lottable09']) || $lineasConsolidadas[$externlinenoOriginal]['lottable09'] === '' || $lineasConsolidadas[$externlinenoOriginal]['lottable09'] === ' ') 
                     && (!empty($lottable09) && $lottable09 !== '' && $lottable09 !== ' ')) {
                     $lineasConsolidadas[$externlinenoOriginal]['lottable09'] = $lottable09;
@@ -489,27 +512,22 @@ try {
             $lineasProcesadas++;
         }
         
-        // Convertir las líneas consolidadas a formato final
         foreach ($lineasConsolidadas as $externlinenoOriginal => $linea) {
             $lottable05 = $linea['lottable05'];
             $fechaVencimiento = formatearFechaVencimiento($lottable05);
             $vencimientoValido = verificarVencimientoValido($lottable05);
-            $precio = formatearPrecio($linea['lottable09']); // Formatear precio
+            $precio = formatearPrecio($linea['lottable09']);
             
             if (!$vencimientoValido && $fechaVencimiento !== 'N/A') {
                 $lineasVencimientoInvalido++;
             }
             
-            // Crear un receiptlinenumber combinado si hay múltiples
             $receiptlinenumberFinal = $linea['receiptlinenumbers'][0];
             if (count($linea['receiptlinenumbers']) > 1) {
                 $receiptlinenumberFinal = implode(',', $linea['receiptlinenumbers']);
             }
             
-            // Limpiar ceros iniciales del receiptlinenumber
             $receiptlinenumberFinal = limpiarReceiptlinenumber($receiptlinenumberFinal);
-            
-            // Limpiar ceros iniciales del externlineno para mostrar solo el número entero
             $externlinenoLimpio = limpiarCerosIniciales($externlinenoOriginal);
             
             $detallesRecepcion[] = [
@@ -517,21 +535,20 @@ try {
                 "receiptkey" => $linea['receiptkey'],
                 "externreceiptkey" => $linea['externreceiptkey'],
                 "sku" => $linea['sku'],
-                "externlineno" => $externlinenoLimpio, // Usamos el limpiado
-                "externlineno_original" => $externlinenoOriginal, // Guardamos el original por si acaso
+                "externlineno" => $externlinenoLimpio,
+                "externlineno_original" => $externlinenoOriginal,
                 "qtyexpected" => $linea['qtyexpected'],
                 "qtyreceived" => $linea['qtyreceived'],
                 "lottable05" => $linea['lottable05'],
                 "fecha_vencimiento" => $fechaVencimiento,
                 "vencimiento_valido" => $vencimientoValido,
                 "tolot" => $linea['tolot'],
-                "precio" => $precio // NUEVO: Campo precio
+                "precio" => $precio
             ];
         }
     }
-    // Buscar asndetails (si no hay receiptdetails)
     else if (isset($datosInfor['asndetails']) && is_array($datosInfor['asndetails'])) {
-        $lineasConsolidadas = []; // Reiniciar para asndetails
+        $lineasConsolidadas = [];
         
         foreach ($datosInfor['asndetails'] as $detalle) {
             $asnlinenumber = $detalle['asnlinenumber'] ?? '';
@@ -546,24 +563,22 @@ try {
             $qtyreceived = floatval($detalle['qtyreceived'] ?? 0);
             $lottable05 = $detalle['lottable05'] ?? '';
             $tolot = $detalle['tolot'] ?? '';
-            $lottable09 = $detalle['lottable09'] ?? ''; // PRECIO
+            $lottable09 = $detalle['lottable09'] ?? '';
             
-            // Usar el externlineno tal como viene de la API
             $externlinenoOriginal = $externlineno;
             
-            // Consolidar por externlineno
             if (!isset($lineasConsolidadas[$externlinenoOriginal])) {
                 $lineasConsolidadas[$externlinenoOriginal] = [
                     'asnlinenumbers' => [$asnlinenumber],
                     'receiptkey' => $datosInfor['asnnumber'] ?? $receiptkey,
                     'externreceiptkey' => $externreceiptkey,
                     'sku' => $sku,
-                    'externlineno' => $externlinenoOriginal, // Guardamos el original
+                    'externlineno' => $externlinenoOriginal,
                     'qtyexpected' => $qtyexpected,
                     'qtyreceived' => $qtyreceived,
                     'lottable05' => $lottable05,
                     'tolot' => $tolot,
-                    'lottable09' => $lottable09, // PRECIO
+                    'lottable09' => $lottable09,
                     'count' => 1
                 ];
             } else {
@@ -582,7 +597,6 @@ try {
                     $lineasConsolidadas[$externlinenoOriginal]['tolot'] = $tolot;
                 }
                 
-                // Tomar el precio (lottable09) del registro que tenga valor
                 if ((empty($lineasConsolidadas[$externlinenoOriginal]['lottable09']) || $lineasConsolidadas[$externlinenoOriginal]['lottable09'] === '' || $lineasConsolidadas[$externlinenoOriginal]['lottable09'] === ' ') 
                     && (!empty($lottable09) && $lottable09 !== '' && $lottable09 !== ' ')) {
                     $lineasConsolidadas[$externlinenoOriginal]['lottable09'] = $lottable09;
@@ -592,27 +606,22 @@ try {
             $lineasProcesadas++;
         }
         
-        // Convertir las líneas consolidadas a formato final
         foreach ($lineasConsolidadas as $externlinenoOriginal => $linea) {
             $lottable05 = $linea['lottable05'];
             $fechaVencimiento = formatearFechaVencimiento($lottable05);
             $vencimientoValido = verificarVencimientoValido($lottable05);
-            $precio = formatearPrecio($linea['lottable09']); // Formatear precio
+            $precio = formatearPrecio($linea['lottable09']);
             
             if (!$vencimientoValido && $fechaVencimiento !== 'N/A') {
                 $lineasVencimientoInvalido++;
             }
             
-            // Crear un asnlinenumber combinado si hay múltiples
             $asnlinenumberFinal = $linea['asnlinenumbers'][0];
             if (count($linea['asnlinenumbers']) > 1) {
                 $asnlinenumberFinal = implode(',', $linea['asnlinenumbers']);
             }
             
-            // Limpiar ceros iniciales del asnlinenumber
             $asnlinenumberFinal = limpiarReceiptlinenumber($asnlinenumberFinal);
-            
-            // Limpiar ceros iniciales del externlineno para mostrar solo el número entero
             $externlinenoLimpio = limpiarCerosIniciales($externlinenoOriginal);
             
             $detallesRecepcion[] = [
@@ -620,27 +629,26 @@ try {
                 "receiptkey" => $linea['receiptkey'],
                 "externreceiptkey" => $linea['externreceiptkey'],
                 "sku" => $linea['sku'],
-                "externlineno" => $externlinenoLimpio, // Usamos el limpiado
-                "externlineno_original" => $externlinenoOriginal, // Guardamos el original por si acaso
+                "externlineno" => $externlinenoLimpio,
+                "externlineno_original" => $externlinenoOriginal,
                 "qtyexpected" => $linea['qtyexpected'],
                 "qtyreceived" => $linea['qtyreceived'],
                 "lottable05" => $linea['lottable05'],
                 "fecha_vencimiento" => $fechaVencimiento,
                 "vencimiento_valido" => $vencimientoValido,
                 "tolot" => $linea['tolot'],
-                "precio" => $precio // NUEVO: Campo precio
+                "precio" => $precio
             ];
         }
     }
     
-    // Si no hay detalles en receiptdetails ni asndetails, buscar en receipt
     if (empty($detallesRecepcion)) {
         $urlReceipt = "https://mingle-ionapi.inforcloudsuite.com/RANSA_PRD/WM/wmwebservice_rest/RANSA_PRD_RANSA_PRD_SCE_PRD_0_wmwhse3/receipts/$valor";
         $resultReceipt = consultarApiInforGET($urlReceipt, $token);
         
         if($resultReceipt['http_code'] === 200 && $resultReceipt['data'] && isset($resultReceipt['data']['receiptdetails'])) {
             $datosReceipt = $resultReceipt['data'];
-            $lineasConsolidadas = []; // Reiniciar para receipt
+            $lineasConsolidadas = [];
             
             foreach ($datosReceipt['receiptdetails'] as $detalle) {
                 $receiptlinenumber = $detalle['receiptlinenumber'] ?? '';
@@ -655,24 +663,22 @@ try {
                 $qtyreceived = floatval($detalle['qtyreceived'] ?? 0);
                 $lottable05 = $detalle['lottable05'] ?? '';
                 $tolot = $detalle['tolot'] ?? '';
-                $lottable09 = $detalle['lottable09'] ?? ''; // PRECIO
+                $lottable09 = $detalle['lottable09'] ?? '';
                 
-                // Usar el externlineno tal como viene de la API
                 $externlinenoOriginal = $externlineno;
                 
-                // Consolidar por externlineno
                 if (!isset($lineasConsolidadas[$externlinenoOriginal])) {
                     $lineasConsolidadas[$externlinenoOriginal] = [
                         'receiptlinenumbers' => [$receiptlinenumber],
                         'receiptkey' => $datosReceipt['receiptkey'] ?? $receiptkey,
                         'externreceiptkey' => $datosReceipt['externreceiptkey'] ?? $externreceiptkey,
                         'sku' => $sku,
-                        'externlineno' => $externlinenoOriginal, // Guardamos el original
+                        'externlineno' => $externlinenoOriginal,
                         'qtyexpected' => $qtyexpected,
                         'qtyreceived' => $qtyreceived,
                         'lottable05' => $lottable05,
                         'tolot' => $tolot,
-                        'lottable09' => $lottable09, // PRECIO
+                        'lottable09' => $lottable09,
                         'count' => 1
                     ];
                 } else {
@@ -691,7 +697,6 @@ try {
                         $lineasConsolidadas[$externlinenoOriginal]['tolot'] = $tolot;
                     }
                     
-                    // Tomar el precio (lottable09) del registro que tenga valor
                     if ((empty($lineasConsolidadas[$externlinenoOriginal]['lottable09']) || $lineasConsolidadas[$externlinenoOriginal]['lottable09'] === '' || $lineasConsolidadas[$externlinenoOriginal]['lottable09'] === ' ') 
                         && (!empty($lottable09) && $lottable09 !== '' && $lottable09 !== ' ')) {
                         $lineasConsolidadas[$externlinenoOriginal]['lottable09'] = $lottable09;
@@ -701,27 +706,22 @@ try {
                 $lineasProcesadas++;
             }
             
-            // Convertir las líneas consolidadas a formato final
             foreach ($lineasConsolidadas as $externlinenoOriginal => $linea) {
                 $lottable05 = $linea['lottable05'];
                 $fechaVencimiento = formatearFechaVencimiento($lottable05);
                 $vencimientoValido = verificarVencimientoValido($lottable05);
-                $precio = formatearPrecio($linea['lottable09']); // Formatear precio
+                $precio = formatearPrecio($linea['lottable09']);
                 
                 if (!$vencimientoValido && $fechaVencimiento !== 'N/A') {
                     $lineasVencimientoInvalido++;
                 }
                 
-                // Crear un receiptlinenumber combinado si hay múltiples
                 $receiptlinenumberFinal = $linea['receiptlinenumbers'][0];
                 if (count($linea['receiptlinenumbers']) > 1) {
                     $receiptlinenumberFinal = implode(',', $linea['receiptlinenumbers']);
                 }
                 
-                // Limpiar ceros iniciales del receiptlinenumber
                 $receiptlinenumberFinal = limpiarReceiptlinenumber($receiptlinenumberFinal);
-                
-                // Limpiar ceros iniciales del externlineno para mostrar solo el número entero
                 $externlinenoLimpio = limpiarCerosIniciales($externlinenoOriginal);
                 
                 $detallesRecepcion[] = [
@@ -729,15 +729,15 @@ try {
                     "receiptkey" => $linea['receiptkey'],
                     "externreceiptkey" => $linea['externreceiptkey'],
                     "sku" => $linea['sku'],
-                    "externlineno" => $externlinenoLimpio, // Usamos el limpiado
-                    "externlineno_original" => $externlinenoOriginal, // Guardamos el original por si acaso
+                    "externlineno" => $externlinenoLimpio,
+                    "externlineno_original" => $externlinenoOriginal,
                     "qtyexpected" => $linea['qtyexpected'],
                     "qtyreceived" => $linea['qtyreceived'],
                     "lottable05" => $linea['lottable05'],
                     "fecha_vencimiento" => $fechaVencimiento,
                     "vencimiento_valido" => $vencimientoValido,
                     "tolot" => $linea['tolot'],
-                    "precio" => $precio // NUEVO: Campo precio
+                    "precio" => $precio
                 ];
             }
         } else {
@@ -746,12 +746,11 @@ try {
         }
     }
     
-    // Ordenar los detalles por externlineno (numéricamente)
+    // Ordenar los detalles por externlineno
     usort($detallesRecepcion, function($a, $b) {
         $aNum = intval($a['externlineno']);
         $bNum = intval($b['externlineno']);
         if ($aNum === $bNum) {
-            // Ordenar por receiptlinenumber (numéricamente el primer número)
             $aRec = intval(explode(',', $a['receiptlinenumber'])[0]);
             $bRec = intval(explode(',', $b['receiptlinenumber'])[0]);
             return $aRec - $bRec;
@@ -761,33 +760,31 @@ try {
     
     // ---------- PREPARAR DETALLES FINALES ----------
     $detallesFinal = [];
-    $lineasConsolidadasFinal = 0; // Contador de líneas consolidadas
+    $lineasConsolidadasFinal = 0;
     
     foreach ($detallesRecepcion as $detalle) {
         if (empty($detalle['sku']) || empty($detalle['externlineno'])) {
             continue;
         }
         
-        // Contar si esta línea fue consolidada (tiene múltiples receiptlinenumbers)
         $receiptlinenumber = $detalle['receiptlinenumber'];
         if (strpos($receiptlinenumber, ',') !== false) {
             $lineasConsolidadasFinal++;
         }
         
-        // Ahora externlineno ya está limpio (sin ceros iniciales)
         $detallesFinal[] = [
             "receiptlinenumber" => $detalle['receiptlinenumber'],
             "receiptkey" => $detalle['receiptkey'],
             "externreceiptkey" => $detalle['externreceiptkey'],
             "sku" => $detalle['sku'],
-            "externlineno" => $detalle['externlineno'], // Ya está limpio
+            "externlineno" => $detalle['externlineno'],
             "qtyexpected" => $detalle['qtyexpected'],
             "qtyreceived" => $detalle['qtyreceived'],
             "lottable05" => $detalle['lottable05'],
             "fecha_vencimiento" => $detalle['fecha_vencimiento'],
             "vencimiento_valido" => $detalle['vencimiento_valido'],
             "tolot" => $detalle['tolot'],
-            "precio" => $detalle['precio'] // NUEVO: Campo precio
+            "precio" => $detalle['precio']
         ];
     }
     
@@ -804,7 +801,7 @@ try {
             "editdate" => isset($datosInfor['editdate']) ? formatearFechaInfor($datosInfor['editdate']) : '',
             "total_lineas" => count($detallesFinal),
             "lineas_vencimiento_invalido" => $lineasVencimientoInvalido,
-            "lineas_consolidadas" => $lineasConsolidadasFinal // Información de líneas consolidadas
+            "lineas_consolidadas" => $lineasConsolidadasFinal
         ],
         'detalle_recepcion' => $detallesFinal,
         'error' => null

@@ -329,10 +329,13 @@ try {
         exit;
     }
     
-    // Verificar si el status es 95
-    if (!in_array($status, ['95', '92'])) {
-        echo json_encode(["error" => "Orden no está expedida por completo. Estado: $status"]);
-        exit;
+    // 🔴 CAMBIO: ELIMINAMOS LA RESTRICCIÓN DE ESTADO
+    // Ya no bloqueamos por estado, permitimos consultar cualquier estado
+    // Solo registramos para información si es necesario
+    $estados_permitidos = ['95', '92']; // Solo informativo
+    if (!in_array($status, $estados_permitidos)) {
+        // No bloqueamos, solo guardamos para referencia
+        error_log("Consulta pedido en estado no expedido: $status - Orden: $orderkey");
     }
     
     // ---------- PROCESAR orderdetails ----------

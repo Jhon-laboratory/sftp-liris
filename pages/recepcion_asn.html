@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta Recepciones LIRIS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- CSS Global -->
+    <link rel="stylesheet" href="../assets/css/estilo.css">
+</head>
+<body>
+    <!-- Botones flotantes en las esquinas -->
+    <div class="floating-buttons">
+        <button class="floating-button left" onclick="volverAlInicio()">
+            <i class="fas fa-arrow-left"></i>
+            <span>Volver al inicio</span>
+        </button>
+        <button class="floating-button right" onclick="irADespachos()">
+            <i class="fas fa-shipping-fast"></i>
+            <span>Despachos / Ordenes de Expedición</span>
+        </button>
+    </div>
+
+    <!-- INDICADOR DE ENVÍO SFTP -->
+    <div class="sftp-indicator" id="sftpIndicator">
+        <i id="sftpIcon"></i>
+        <span id="sftpMessage"></span>
+        <button class="close-btn" onclick="cerrarIndicadorSFTP()">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <!-- NUEVOS BOTONES FLOTANTES VERTICALES CON TEXTO -->
+    <div class="floating-actions" id="floatingActions">
+        <!-- Botón 1: Enviar a Interfaz (solo visible si status = 15) -->
+        <div class="action-item" id="actionEnviarInterfaz" style="display: none;">
+            <button class="action-button primary" onclick="enviarDatosInterfaz()">
+                <i class="fas fa-paper-plane"></i>
+                <div class="tooltip">Enviar datos a Interfaz SFTP</div>
+            </button>
+            <div class="action-label primary">Enviar SFTP</div>
+        </div>
+        
+        <!-- Botón 2: Descargar Excel -->
+        <div class="action-item">
+            <button class="action-button secondary" onclick="descargarExcel()">
+                <i class="fas fa-file-excel"></i>
+                <div class="tooltip">Descargar Excel (CSV)</div>
+            </button>
+            <div class="action-label secondary">Descargar Excel</div>
+        </div>
+        
+        <!-- Botón 3: Descargar TXT -->
+        <div class="action-item">
+            <button class="action-button tertiary" onclick="descargarTXT()">
+                <i class="fas fa-file-alt"></i>
+                <div class="tooltip">Descargar TXT formateado</div>
+            </button>
+            <div class="action-label tertiary">Descargar TXT</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Header con logos y búsqueda -->
+        <div class="header-top">
+            <div class="logo-container">
+                <img src="https://tse2.mm.bing.net/th/id/OIP.Ckl7mNDKlUqm6056On3FIwAAAA?w=380&h=125&rs=1&pid=ImgDetMain&o=7&rm=3" 
+                     class="logo" 
+                     alt="Logo Servientrega"
+                     loading="lazy">
+            </div>
+            
+            <div class="title-section">
+                <h1 class="title">Consulta Recepciones LIRIS</h1>
+                <p class="subtitle">Sistema de consulta de Recepciones</p>
+            </div>
+            
+            <div class="search-bar">
+                <input type="text" 
+                       id="numeroRecepcion" 
+                       class="search-input" 
+                       placeholder="🔍 Busque por ASN/Recepcion"
+                       required>
+                <button id="btnBuscar" class="search-btn">
+                    <i class="fas fa-search"></i> Consultar
+                </button>
+            </div>
+        </div>
+
+        <!-- Mensajes -->
+        <div class="message-container" id="messageContainer"></div>
+
+        <!-- Resultados -->
+        <div class="result-section" id="resultSection">
+            <!-- Tarjetas de totales -->
+            <h2 class="section-title">
+                <i class="fas fa-chart-bar"></i> Resumen de la Recepción
+            </h2>
+            
+            <div class="stats-cards" id="statsCards">
+                <div class="stat-card">
+                    <span class="stat-label">
+                        <i class="fas fa-box"></i> Total Cantidad Esperada
+                    </span>
+                    <span class="stat-value" id="totalEsperado">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">
+                        <i class="fas fa-check-circle"></i> Total Cantidad Recibida
+                    </span>
+                    <span class="stat-value" id="totalRecibido">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">
+                        <i class="fas fa-list"></i> Total Líneas
+                    </span>
+                    <span class="stat-value" id="totalLineas">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">
+                        <i class="fas fa-calendar-alt"></i> Líneas con Fecha Vencimiento
+                    </span>
+                    <span class="stat-value" id="lineasConFecha">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">
+                        <i class="fas fa-exclamation-triangle"></i> Líneas con Observaciones
+                    </span>
+                    <span class="stat-value" id="lineasConProblemas">0</span>
+                </div>
+            </div>
+
+            <!-- Información de la Recepción -->
+            <h2 class="section-title">
+                <i class="fas fa-info-circle"></i> Información de la Recepción
+            </h2>
+            
+            <div class="asn-header" id="asnHeader">
+                <!-- Se llenará dinámicamente -->
+            </div>
+
+
+
+            <!-- Detalle de la Recepción con filtro -->
+            <h2 class="section-title" style="display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fas fa-table"></i> Detalle de la Recepción</span>
+                <button id="btnFiltroObservaciones" class="search-btn" onclick="toggleFiltroObservaciones()">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="btnFiltroTexto">Ver solo observaciones</span>
+                    <span id="contadorObservaciones">0</span>
+                </button>
+            </h2>
+            <div class="detalle-table-container">
+                <table class="detalle-table" id="detalleTable">
+                    <thead>
+                        <tr>
+                            <th># Línea</th>
+                            <th>Número Recepción</th>
+                            <th>SKU</th>
+                            <th>Línea Externa</th>
+                            <th>Cantidad Esperada</th>
+                            <th>Cantidad Recibida</th>
+                            <th>Fecha Vencimiento</th>
+                            <th>Precio</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detalleBody">
+                        <!-- Se llenará dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Sistema de consulta Recepciones LIRIS &copy; 2024</p>
+            <p style="font-size: 12px; margin-top: 5px; color: #95a5a6;">
+                <i class="fas fa-shield-alt"></i> Sistema seguro y confiable | 
+                <i class="fas fa-calendar-alt"></i> Fechas de vencimiento
+            </p>
+        </div>
+    </div>
+
+    <!-- JavaScript específico de recepcion asn -->
+    <script src="../assets/js/recepcion_asn.js"></script>
+</body>
+</html>
