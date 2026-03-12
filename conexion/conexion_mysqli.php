@@ -13,56 +13,45 @@ define('DB_ENCODING', 'UTF-8');
 
 /**
  * Función principal de conexión a SQL Server Azure
- * Versión corregida - Sin opciones no válidas
+ * VERSIÓN SIMPLIFICADA - Sin opciones problemáticas
  */
 function conexionSQL() {
-    // Opciones VÁLIDAS para sqlsrv_connect
+    // Opciones MÍNIMAS Y VÁLIDAS para sqlsrv_connect
     $connectionOptions = array(
         "Database" => DB_NAME,
         "Uid" => DB_USER,
         "PWD" => DB_PASSWORD,
         "CharacterSet" => DB_ENCODING,
         "ReturnDatesAsStrings" => true,
-        "Encrypt" => true,                    // Requerido para Azure
+        "Encrypt" => true,
         "TrustServerCertificate" => false,
-        "LoginTimeout" => 30                   // Timeout de login en segundos (SÍ es válido)
-        // "ConnectTimeout" => 30              // ❌ ESTA OPCIÓN NO ES VÁLIDA - Eliminada
+        "LoginTimeout" => 30
+        // "ConnectTimeout" => 30  ← ESTA LÍNEA NO DEBE EXISTIR
     );
     
-    // Intentar conexión
+    error_log("Intentando conectar a: " . DB_SERVER);
+    
     $conn = sqlsrv_connect(DB_SERVER, $connectionOptions);
     
     if ($conn === false) {
-        // Registrar error sin mostrarlo al usuario
         $errors = sqlsrv_errors();
         error_log("Error conexión Azure: " . print_r($errors, true));
         return false;
     }
     
+    error_log("Conexión exitosa a Azure SQL");
     return $conn;
 }
 
-// Para pruebas rápidas - descomentar SOLO para probar
+// Prueba simple - descomentar solo para probar
 /*
-echo "<pre>";
 $conn = conexionSQL();
 if ($conn) {
     echo "✅ Conectado a Azure SQL\n";
-    
-    // Probar query simple
-    $sql = "SELECT @@VERSION as version";
-    $stmt = sqlsrv_query($conn, $sql);
-    if ($stmt) {
-        $row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC);
-        echo "Versión: " . substr($row['version'], 0, 100) . "...\n";
-        sqlsrv_free_stmt($stmt);
-    }
-    
     sqlsrv_close($conn);
 } else {
     echo "❌ Error de conexión\n";
     print_r(sqlsrv_errors());
 }
-echo "</pre>";
 */
 ?>
