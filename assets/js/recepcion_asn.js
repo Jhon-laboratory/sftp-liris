@@ -437,7 +437,7 @@ async function enviarDatosInterfaz() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000);
         
-        const response = await fetch('../controller/enviarsftp_asn.php', {
+        const response = await fetch('../controller/enviarsftp.php', {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',

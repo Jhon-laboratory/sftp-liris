@@ -5,11 +5,11 @@ session_start();
 if (!isset($_SESSION['logueado']) || $_SESSION['logueado'] !== true) {
     // No está logueado, redirigir al login
     header('Location: http://9.234.192.192/login/');
-    exit;
+   exit;
 }
 
 // Si llegó aquí, el usuario está logueado
-?>
+?>*/
 <!DOCTYPE html>
 <html lang="es">
 <head>
