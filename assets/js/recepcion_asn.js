@@ -6,23 +6,28 @@ let datosDetalleOriginal = [];
 
 // ========== FUNCIÓN PARA REGISTRAR AUDITORÍA ==========
 async function registrarAuditoria(accion, resultado, detalles = '') {
-    // Solo registrar si hay datos actuales
-    const numeroRecepcion = document.getElementById('numeroRecepcion')?.value || 
-                            currentRecepcionData?.informacion_recepcion?.externreceiptkey || '';
+    console.log('📝 Intentando registrar auditoría:', { accion, resultado, detalles });
     
-    if (!numeroRecepcion) {
-        console.log('No hay recepción para auditar');
+    const numeroOrden = document.getElementById('numeroOrden')?.value || 
+                        currentPedidoData?.informacion_pedido?.externorderkey || '';
+    
+    console.log('🔍 Número de orden:', numeroOrden);
+    
+    if (!numeroOrden) {
+        console.log('⚠️ No hay orden para auditar');
         return;
     }
     
     const data = {
         accion: accion,
-        modulo: 'RECEPCION',
-        valor_buscado: numeroRecepcion,
-        numero_orden: numeroRecepcion,
+        modulo: 'DESPACHO',
+        valor_buscado: numeroOrden,
+        numero_orden: numeroOrden,
         resultado: resultado,
         detalles: detalles
     };
+    
+    console.log('📤 Enviando datos:', data);
     
     try {
         const response = await fetch('../controller/guardar_auditoria.php', {
@@ -30,12 +35,29 @@ async function registrarAuditoria(accion, resultado, detalles = '') {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
-        const result = await response.json();
-        if (!result.success) {
-            console.error('Error registrando auditoría:', result.error);
+        
+        console.log('📥 Respuesta status:', response.status);
+        console.log('📥 Respuesta headers:', response.headers.get('content-type'));
+        
+        // Obtener el texto de la respuesta
+        const textResponse = await response.text();
+        console.log('📥 Respuesta texto COMPLETA:', textResponse);
+        
+        // Intentar parsear como JSON
+        try {
+            const result = JSON.parse(textResponse);
+            console.log('✅ JSON válido:', result);
+        } catch (jsonError) {
+            console.error('❌ ERROR: La respuesta NO es JSON');
+            console.error('Esto es lo que el servidor devolvió:');
+            console.error(textResponse);
+            
+            // Mostrar alerta con el error para que lo veas inmediatamente
+            alert('ERROR EN AUDITORÍA - Revisa la consola (F12) para ver el error PHP');
         }
+        
     } catch (error) {
-        console.error('Error registrando auditoría:', error);
+        console.error('❌ Error en fetch:', error);
     }
 }
 
