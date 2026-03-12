@@ -67,7 +67,7 @@ function volverAlInicio() {
 }
 
 function irADespachos() {
-    window.location.href = 'despachos1.html';
+    window.location.href = 'despachos1.php';
 }
 
 // ========== INDICADOR SFTP ==========

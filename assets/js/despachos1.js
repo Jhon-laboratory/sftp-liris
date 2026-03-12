@@ -45,7 +45,7 @@ function volverAlInicio() {
 }
 
 function irAVerificadasCerradas() {
-    window.location.href = 'recepcion_asn.html';
+    window.location.href = 'recepcion_asn.php';
 }
 
 // ========== INDICADOR SFTP ==========

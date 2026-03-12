@@ -1,5 +1,13 @@
 <?php
-// Si necesitas lógica PHP al inicio, aquí
+session_start();
+
+// Verificar si el usuario está logueado
+if (!isset($_SESSION['logueado']) || $_SESSION['logueado'] !== true) {
+    // No está logueado, redirigir al login
+    header('Location: https://ransa-seguro.com/login/');
+    exit;
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="es">
