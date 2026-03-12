@@ -4,41 +4,6 @@ let sftpTimeout = null;
 let filtroObservacionesActivo = false;
 let datosDetalleOriginal = [];
 
-// ========== FUNCIÓN PARA REGISTRAR AUDITORÍA ==========
-async function registrarAuditoria(accion, resultado, detalles = '') {
-    // Solo registrar si hay datos actuales
-    const numeroRecepcion = document.getElementById('numeroRecepcion')?.value || 
-                            currentRecepcionData?.informacion_recepcion?.externreceiptkey || '';
-    
-    if (!numeroRecepcion) {
-        console.log('No hay recepción para auditar');
-        return;
-    }
-    
-    const data = {
-        accion: accion,
-        modulo: 'RECEPCION',
-        valor_buscado: numeroRecepcion,
-        numero_orden: numeroRecepcion,
-        resultado: resultado,
-        detalles: detalles
-    };
-    
-    try {
-        const response = await fetch('../controller/guardar_auditoria.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        const result = await response.json();
-        if (!result.success) {
-            console.error('Error registrando auditoría:', result.error);
-        }
-    } catch (error) {
-        console.error('Error registrando auditoría:', error);
-    }
-}
-
 // ========== FUNCIONES DE NAVEGACIÓN ==========
 function volverAlInicio() {
     window.location.href = '../index.php';
@@ -317,7 +282,6 @@ async function enviarDatosInterfaz() {
     if (status !== '15') {
         const estadoTexto = currentRecepcionData.informacion_recepcion.status_texto || `Estado ${status}`;
         mostrarIndicadorSFTP('warning', `⚠️ Solo se pueden enviar recepciones con estado "Verificado y cerrado" (15). Estado actual: ${estadoTexto}`);
-        await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', `Estado incorrecto: ${status} - ${estadoTexto}`);
         return;
     }
 
@@ -356,8 +320,6 @@ async function enviarDatosInterfaz() {
         const confirmar = confirm(mensajeAdvertencia);
         if (!confirmar) {
             mostrarIndicadorSFTP('info', 'Envío cancelado por problemas en fechas');
-            await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', 
-                `Cancelado por problemas en fechas (${lineasConProblemasFecha.length} fechas inválidas)`);
             return;
         }
     }
@@ -374,7 +336,6 @@ async function enviarDatosInterfaz() {
     
     if (!confirmar) {
         mostrarIndicadorSFTP('info', 'Envío cancelado por el usuario');
-        await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', 'Cancelado por el usuario');
         return;
     }
 
@@ -407,6 +368,7 @@ async function enviarDatosInterfaz() {
             lines.push(fields.join('|]'));
         });
         
+        // 🔴 CAMBIO IMPORTANTE: Usar CRLF (\r\n) para compatibilidad con Windows
         const txtContent = lines.join('\r\n');
         const nombreArchivo = `${externreceiptkey}.txt`;
         
@@ -431,7 +393,7 @@ async function enviarDatosInterfaz() {
                 usuario: 'sistema_recepciones',
                 fechas_validas: lineasConFechaValida,
                 fechas_problema: lineasConProblemasFecha.length,
-                formato_saltos: 'CRLF'
+                formato_saltos: 'CRLF' // Informar que usamos CRLF
             }),
             signal: controller.signal
         });
@@ -451,11 +413,8 @@ async function enviarDatosInterfaz() {
                 `📊 ${lineasConFechaValida}/${totalLineas} fechas válidas\n` +
                 `📝 Formato: CRLF (Windows)`, 10000);
             mostrarMensaje('success', `Envío SFTP exitoso (CRLF)`);
-            await registrarAuditoria('ENVIO_SFTP', 'EXITO', 
-                `Archivo ${nombreArchivo} enviado. Líneas: ${totalLineas}, Fechas válidas: ${lineasConFechaValida}`);
         } else {
             mostrarIndicadorSFTP('error', `❌ Error: ${resultado.error || 'Desconocido'}`);
-            await registrarAuditoria('ENVIO_SFTP', 'ERROR', resultado.error || 'Error desconocido');
         }
         
     } catch (error) {
@@ -468,7 +427,6 @@ async function enviarDatosInterfaz() {
             mensaje = 'Timeout excedido (60s)';
         }
         mostrarIndicadorSFTP('error', `❌ ${mensaje}`);
-        await registrarAuditoria('ENVIO_SFTP', 'ERROR', `${mensaje}: ${error.message}`);
     }
 }
 
@@ -478,9 +436,6 @@ function descargarExcel() {
         mostrarMensaje('error', 'No hay datos para exportar');
         return;
     }
-
-    // Registrar inicio de descarga
-    registrarAuditoria('DESCARGA_EXCEL', 'INICIADO', 'Iniciando descarga de Excel');
 
     try {
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item .action-button');
@@ -515,30 +470,26 @@ function descargarExcel() {
         
         const csvContent = csvData.map(row => 
             row.map(cell => `"${cell}"`).join(',')
-        ).join('\r\n');
+        ).join('\r\n'); // 🔴 También CRLF para Excel
         
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         
         link.href = url;
-        const nombreArchivo = `LIRIS_REC_${currentRecepcionData.informacion_recepcion.receiptkey}_${new Date().toISOString().slice(0,10)}.csv`;
-        link.download = nombreArchivo;
+        link.download = `LIRIS_REC_${currentRecepcionData.informacion_recepcion.receiptkey}_${new Date().toISOString().slice(0,10)}.csv`;
         document.body.appendChild(link);
         link.click();
         
-        setTimeout(async () => {
+        setTimeout(() => {
             btn.innerHTML = originalHTML;
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            await registrarAuditoria('DESCARGA_EXCEL', 'EXITO', 
-                `Archivo ${nombreArchivo} generado con ${csvData.length-1} líneas`);
             mostrarMensaje('success', 'Archivo Excel descargado');
         }, 100);
         
     } catch (error) {
         console.error('Error:', error);
-        registrarAuditoria('DESCARGA_EXCEL', 'ERROR', `Error: ${error.message}`);
         mostrarMensaje('error', 'Error al generar Excel');
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item .action-button');
         btn.innerHTML = '<i class="fas fa-file-excel"></i>';
@@ -552,9 +503,6 @@ function descargarTXT() {
         return;
     }
 
-    // Registrar inicio de descarga
-    registrarAuditoria('DESCARGA_TXT', 'INICIADO', 'Iniciando descarga de TXT');
-
     try {
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
         const originalHTML = btn.innerHTML;
@@ -566,7 +514,6 @@ function descargarTXT() {
         const fechaCreacionTXT = formatearFechaCreacionTXT(adddate);
         
         if (!externreceiptkey || externreceiptkey === 'N/A') {
-            registrarAuditoria('DESCARGA_TXT', 'ERROR', 'No se encontró número externo válido');
             mostrarMensaje('error', 'No se encontró número externo válido');
             btn.innerHTML = originalHTML;
             return;
@@ -587,6 +534,7 @@ function descargarTXT() {
             lines.push(fields.join('|]'));
         });
         
+        // 🔴 CAMBIO IMPORTANTE: Usar CRLF (\r\n) para compatibilidad con Windows
         const txtContent = lines.join('\r\n');
         const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
         const link = document.createElement('a');
@@ -597,18 +545,15 @@ function descargarTXT() {
         document.body.appendChild(link);
         link.click();
         
-        setTimeout(async () => {
+        setTimeout(() => {
             btn.innerHTML = originalHTML;
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            await registrarAuditoria('DESCARGA_TXT', 'EXITO', 
-                `Archivo ${externreceiptkey}.txt generado con ${lines.length} líneas`);
             mostrarMensaje('success', `Archivo ${externreceiptkey}.txt descargado (CRLF)`);
         }, 100);
         
     } catch (error) {
         console.error('Error generando TXT:', error);
-        registrarAuditoria('DESCARGA_TXT', 'ERROR', `Error: ${error.message}`);
         mostrarMensaje('error', 'Error al generar archivo TXT');
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
         btn.innerHTML = '<i class="fas fa-file-alt"></i>';

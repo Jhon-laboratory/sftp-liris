@@ -4,41 +4,6 @@ let sftpTimeout = null;
 let filtroObservacionesActivo = false;
 let datosDetalleOriginal = [];
 
-// ========== FUNCIÓN PARA REGISTRAR AUDITORÍA ==========
-async function registrarAuditoria(accion, resultado, detalles = '') {
-    // Solo registrar si hay datos actuales
-    const numeroOrden = document.getElementById('numeroOrden')?.value || 
-                        currentPedidoData?.informacion_pedido?.externorderkey || '';
-    
-    if (!numeroOrden) {
-        console.log('No hay orden para auditar');
-        return;
-    }
-    
-    const data = {
-        accion: accion,
-        modulo: 'DESPACHO',
-        valor_buscado: numeroOrden,
-        numero_orden: numeroOrden,
-        resultado: resultado,
-        detalles: detalles
-    };
-    
-    try {
-        const response = await fetch('../controller/guardar_auditoria.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        const result = await response.json();
-        if (!result.success) {
-            console.error('Error registrando auditoría:', result.error);
-        }
-    } catch (error) {
-        console.error('Error registrando auditoría:', error);
-    }
-}
-
 // ========== FUNCIONES DE NAVEGACIÓN ==========
 function volverAlInicio() {
     window.location.href = '../index.php';
@@ -225,9 +190,6 @@ function descargarExcel() {
         return;
     }
 
-    // Registrar inicio de descarga
-    registrarAuditoria('DESCARGA_EXCEL', 'INICIADO', 'Iniciando descarga de Excel');
-
     try {
         const btn = document.querySelector('#actionEnviarInterfaz .action-button');
         const originalHTML = btn.innerHTML;
@@ -275,15 +237,13 @@ function descargarExcel() {
         XLSX.utils.book_append_sheet(wb, ws, 'Detalle');
         XLSX.writeFile(wb, `LIRIS_${ordenKey}_${fecha}.xlsx`);
         
-        setTimeout(async () => {
+        setTimeout(() => {
             btn.innerHTML = originalHTML;
-            await registrarAuditoria('DESCARGA_EXCEL', 'EXITO', `Archivo LIRIS_${ordenKey}_${fecha}.xlsx generado`);
             mostrarMensaje('success', 'Archivo Excel descargado correctamente');
         }, 100);
         
     } catch (error) {
         console.error('Error generando Excel:', error);
-        registrarAuditoria('DESCARGA_EXCEL', 'ERROR', `Error: ${error.message}`);
         mostrarMensaje('error', 'Error al generar archivo Excel');
         const btn = document.querySelector('#actionEnviarInterfaz .action-button');
         btn.innerHTML = '<i class="fas fa-file-excel"></i>';
@@ -297,9 +257,6 @@ function descargarTXT() {
         return;
     }
 
-    // Registrar inicio de descarga
-    registrarAuditoria('DESCARGA_TXT', 'INICIADO', 'Iniciando descarga de TXT');
-
     try {
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
         const originalHTML = btn.innerHTML;
@@ -309,7 +266,6 @@ function descargarTXT() {
         const externorderkey = currentPedidoData.informacion_pedido.externorderkey || '';
         
         if (!externorderkey) {
-            registrarAuditoria('DESCARGA_TXT', 'ERROR', 'No se encontró orden externa');
             mostrarMensaje('error', 'No se encontró orden externa');
             btn.innerHTML = originalHTML;
             return;
@@ -341,7 +297,6 @@ function descargarTXT() {
         });
         
         if (lines.length === 0) {
-            registrarAuditoria('DESCARGA_TXT', 'CANCELADO', 'No hay líneas con cantidad enviada > 0');
             mostrarMensaje('warning', 'No hay líneas con cantidad enviada > 0');
             btn.innerHTML = originalHTML;
             return;
@@ -357,18 +312,15 @@ function descargarTXT() {
         document.body.appendChild(link);
         link.click();
         
-        setTimeout(async () => {
+        setTimeout(() => {
             btn.innerHTML = originalHTML;
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            await registrarAuditoria('DESCARGA_TXT', 'EXITO', 
-                `Archivo ${externorderkey}.txt generado con ${lineasIncluidas} líneas (${lineasFiltradas} filtradas)`);
             mostrarMensaje('success', `Archivo ${externorderkey}.txt descargado`);
         }, 100);
         
     } catch (error) {
         console.error('Error generando TXT:', error);
-        registrarAuditoria('DESCARGA_TXT', 'ERROR', `Error: ${error.message}`);
         mostrarMensaje('error', 'Error al generar archivo TXT');
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
         btn.innerHTML = '<i class="fas fa-file-alt"></i>';
@@ -392,7 +344,6 @@ async function enviarDatosInterfaz() {
     
     if (status !== '95') {
         mostrarIndicadorSFTP('warning', `⚠️ Solo pedidos con estado 95. Actual: ${status}`);
-        await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', `Estado incorrecto: ${status}`);
         return;
     }
 
@@ -420,7 +371,6 @@ async function enviarDatosInterfaz() {
     
     if (!confirmar) {
         mostrarIndicadorSFTP('info', 'Envío cancelado');
-        await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', 'Cancelado por el usuario');
         return;
     }
 
@@ -455,7 +405,6 @@ async function enviarDatosInterfaz() {
         if (lines.length === 0) {
             mostrarIndicadorSFTP('warning', '⚠️ No hay líneas con envío > 0');
             btn.innerHTML = originalHTML;
-            await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', 'No hay líneas con envío > 0');
             return;
         }
         
@@ -467,6 +416,7 @@ async function enviarDatosInterfaz() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000);
         
+        // 🔴 IMPORTANTE: Ruta actualizada a controller/
         const response = await fetch('../controller/enviarsftp.php', {
             method: 'POST',
             headers: { 
@@ -498,11 +448,8 @@ async function enviarDatosInterfaz() {
                 `✅ Archivo ${nombreArchivo} enviado a SFTP\n` +
                 `📊 ${lineasIncluidas} líneas incluidas`, 10000);
             mostrarMensaje('success', `Envío SFTP exitoso`);
-            await registrarAuditoria('ENVIO_SFTP', 'EXITO', 
-                `Archivo ${nombreArchivo} enviado con ${lineasIncluidas} líneas`);
         } else {
             mostrarIndicadorSFTP('error', `❌ Error: ${resultado.error || 'Desconocido'}`);
-            await registrarAuditoria('ENVIO_SFTP', 'ERROR', resultado.error || 'Error desconocido');
         }
         
     } catch (error) {
@@ -515,7 +462,6 @@ async function enviarDatosInterfaz() {
             mensaje = 'Timeout excedido';
         }
         mostrarIndicadorSFTP('error', `❌ ${mensaje}`);
-        await registrarAuditoria('ENVIO_SFTP', 'ERROR', `${mensaje}: ${error.message}`);
     }
 }
 
@@ -775,6 +721,7 @@ async function buscarPedido() {
         ocultarResultados();
         limpiarResultados();
         
+        // 🔴 IMPORTANTE: Ruta actualizada a controller/
         const response = await fetch(`../controller/consulta_liris.php?valor=${encodeURIComponent(numeroOrden)}`);
         
         if (!response.ok) {
@@ -827,12 +774,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Rotar placeholders
-    const ejemplos = ["00636825_091", "DP.09.03.2026.melip", "00635735_091"];
+    const ejemplos = ["	00636825_091", "DP.09.03.2026.melip", "00635735_091"];
     let ejemploIndex = 0;
     
     setInterval(() => {
         if (numeroOrden) {
-            numeroOrden.placeholder = `🔍 Busque por Orden Externa (ej: ${ejemplos[ejemploIndex]})`;
+            numeroOrden.placeholder = `🔍 Busque por Orden Externa ${ejemplos[ejemploIndex]})`;
             ejemploIndex = (ejemploIndex + 1) % ejemplos.length;
         }
     }, 3000);
