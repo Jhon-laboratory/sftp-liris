@@ -17,11 +17,11 @@ function navegarA(modulo) {
 
     setTimeout(() => {
         if (modulo === 'ordenes-compra') {
-            // 🔴 CAMBIO IMPORTANTE: Ruta absoluta
+            //
             window.location.href = "/sftp-liris/pages/recepcion_asn.php";
         } 
         else if (modulo === 'despachos') {
-            // 🔴 CAMBIO IMPORTANTE: Ruta absoluta
+            //
             window.location.href = "/sftp-liris/pages/despachos1.php";
         }
     }, 200);

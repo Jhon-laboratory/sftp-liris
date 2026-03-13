@@ -1,9 +1,15 @@
 <?php
 // enviarsftp.php - CON RUTAS DIFERENTES PARA DESPACHO Y RECEPCIÓN
+// VERSIÓN CORREGIDA - Manejo de errores PHP
 require __DIR__ . '/../phpseclib/vendor/autoload.php';
 use phpseclib3\Net\SFTP;
 
-// Headers para JSON
+// 🔥 IMPORTANTE: Deshabilitar muestra de errores en producción
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
+error_reporting(E_ALL); // Solo loguear, no mostrar
+
+// Headers para JSON - DEBEN IR ANTES DE CUALQUIER OUTPUT
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -33,7 +39,7 @@ try {
     $contenido = $input['contenido'];
     $nombre_archivo = $input['nombre_archivo'];
     $orden = $input['orden'] ?? 'desconocido';
-    $tipo = $input['tipo'] ?? 'despacho'; // 'despacho' o 'recepcion'
+    $tipo = $input['tipo'] ?? 'despacho';
     $lineas = $input['lineas'] ?? 0;
     
     // Configuración SFTP base
@@ -46,13 +52,15 @@ try {
     $rutas = [
         'despacho' => [
             'base' => '/RECIBE/TRANSACCIONES/TransferenciaPick',
-            //'subcarpeta' => 'Historico',
             'log_prefix' => 'DESPACHO'
         ],
         'recepcion' => [
-            'base' => '/RECIBE/TRANSACCIONES/ConfirmacionOC',  // Ruta diferente para recepciones
-            //'subcarpeta' => 'Procesados',
+            'base' => '/RECIBE/TRANSACCIONES/ConfirmacionOC',
             'log_prefix' => 'RECEPCION'
+        ],
+        'devolucion' => [
+            'base' => '/RECIBE/TRANSACCIONES/DevolucionProveedor/Historico',
+            'log_prefix' => 'DEVOLUCION'
         ]
     ];
     
@@ -62,15 +70,20 @@ try {
     }
     
     $ruta_config = $rutas[$tipo];
-    $remote_dir = $ruta_config['base'] . '/' . $ruta_config['subcarpeta'];
+    $remote_dir = $ruta_config['base'];
     $log_prefix = $ruta_config['log_prefix'];
+    
+    // 🔥 VERIFICAR QUE PHPSECLIB ESTÁ CARGADO CORRECTAMENTE
+    if (!class_exists('phpseclib3\Net\SFTP')) {
+        throw new Exception("Clase SFTP no encontrada. Verificar instalación de phpseclib");
+    }
     
     // Conectar
     $sftp = new SFTP($host, $port);
     $sftp->setTimeout(30);
     
     if (!$sftp->login($user, $pass)) {
-        throw new Exception("No se pudo conectar al SFTP");
+        throw new Exception("No se pudo conectar al SFTP - Credenciales incorrectas o servidor no responde");
     }
     
     // Crear carpeta si no existe
@@ -95,7 +108,7 @@ try {
     
     $file_size = $sftp->filesize($remote_file);
     
-    // Log de éxito (opcional)
+    // Log de éxito
     $log_dir = __DIR__ . '/../logs';
     if (!is_dir($log_dir)) {
         mkdir($log_dir, 0755, true);
@@ -125,15 +138,20 @@ try {
         mkdir($log_dir, 0755, true);
     }
     
+    $error_message = $e->getMessage();
+    
     file_put_contents($log_dir . '/sftp_errors.log', 
-        date('Y-m-d H:i:s') . " | ERROR: " . $e->getMessage() . " | " . ($tipo ?? 'desconocido') . "\n", 
+        date('Y-m-d H:i:s') . " | ERROR: " . $error_message . " | " . ($tipo ?? 'desconocido') . "\n", 
         FILE_APPEND
     );
+    
+    // 🔥 IMPORTANTE: Limpiar cualquier output previo
+    if (ob_get_level()) ob_clean();
     
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => $e->getMessage(),
+        'error' => $error_message,
         'archivo' => $nombre_archivo ?? 'desconocido',
         'tipo' => $tipo ?? 'desconocido'
     ]);

@@ -1496,3 +1496,375 @@ body.index-page {
     padding: 8px;
     border-radius: 6px;
 }
+/* ========== ESTILOS PARA PÁGINA DE AUDITORÍA ========== */
+.auditoria-container {
+    padding: 20px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    margin: 20px 0;
+}
+
+.filtros-container {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.filtro-item {
+    flex: 1;
+    min-width: 150px;
+}
+
+.filtro-item label {
+    display: block;
+    font-size: 12px;
+    color: #7f8c8d;
+    margin-bottom: 5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.filtro-item select, 
+.filtro-item input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    background: white;
+}
+
+.filtro-item select:focus,
+.filtro-item input:focus {
+    border-color: #1a970a;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(230, 126, 34, 0.1);
+}
+
+.filtro-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.btn-filtro {
+    background: linear-gradient(135deg, #1a970a, #167d08);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s;
+    height: 40px;
+    white-space: nowrap;
+}
+
+.btn-filtro:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(230, 126, 34, 0.3);
+}
+
+.btn-filtro-secondary {
+    background: white;
+    color: #1a970a;
+    border: 1px solid #ddd;
+}
+
+.btn-filtro-secondary:hover {
+    background: #f8f9fa;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Tabla de auditoría */
+.table-auditoria {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.table-auditoria thead th {
+    background: linear-gradient(135deg, #136c07, #105a06);
+    color: white;
+    padding: 12px 10px;
+    font-weight: 600;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.table-auditoria tbody td {
+    padding: 10px;
+    border-bottom: 1px solid #ecf0f1;
+    vertical-align: middle;
+}
+
+.table-auditoria tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.table-auditoria tbody tr.seleccionada {
+    background: #fff3e0;
+}
+
+/* Badges para resultados */
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-exito {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.badge-error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.badge-cancelado {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+}
+
+.badge-iniciado {
+    background: #cce5ff;
+    color: #004085;
+    border: 1px solid #b8daff;
+}
+
+/* Badges para módulos */
+.badge-modulo {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.badge-despacho {
+    background: #e3f2fd;
+    color: #0d47a1;
+}
+
+.badge-recepcion {
+    background: #e8f5e8;
+    color: #1e5f1e;
+}
+
+/* Columna de fecha */
+.fecha-columna {
+    font-family: monospace;
+    font-size: 12px;
+    color: #7f8c8d;
+    white-space: nowrap;
+}
+
+/* Detalle con tooltip */
+.detalle-cell {
+    max-width: 250px;
+    position: relative;
+    cursor: help;
+}
+
+.detalle-cell .detalle-preview {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.detalle-cell .detalle-completo {
+    display: none;
+    position: absolute;
+    background: #2c3e50;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    max-width: 400px;
+    word-wrap: break-word;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 5px;
+}
+
+.detalle-cell:hover .detalle-completo {
+    display: block;
+}
+
+/* Paginación personalizada */
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+    padding: 5px 10px;
+    margin: 0 2px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background: white;
+    color: #34495e !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background: linear-gradient(135deg, #1a970a, #1a970a);
+    border-color: #1a970a;
+    color: white !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: #f8f9fa;
+    border-color: #bdc3c7;
+}
+
+/* Contador de registros */
+.auditoria-stats {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.stat-auditoria {
+    background: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+    border-left: 4px solid #1a970a;
+}
+
+.stat-auditoria .numero {
+    font-size: 24px;
+    font-weight: bold;
+    color: #2c3e50;
+    line-height: 1.2;
+}
+
+.stat-auditoria .etiqueta {
+    font-size: 12px;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .filtros-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .filtro-item {
+        width: 100%;
+    }
+    
+    .filtro-actions {
+        justify-content: stretch;
+    }
+    
+    .btn-filtro {
+        flex: 1;
+        justify-content: center;
+    }
+    
+    .table-auditoria {
+        font-size: 12px;
+    }
+    
+    .badge {
+        padding: 2px 6px;
+        font-size: 9px;
+    }
+}
+.badge-despacho {
+    background: #e3f2fd;
+    color: #0d47a1;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.badge-recepcion {
+    background: #e8f5e8;
+    color: #1e5f1e;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.fecha-columna {
+    font-family: monospace;
+    font-size: 12px;
+    color: #7f8c8d;
+    white-space: nowrap;
+}
+
+.detalle-cell {
+    position: relative;
+    cursor: help;
+}
+
+.detalle-preview {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 250px;
+}
+
+.detalle-completo {
+    display: none;
+    position: absolute;
+    background: #2c3e50;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    max-width: 400px;
+    word-wrap: break-word;
+    z-index: 1000;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 5px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.detalle-cell:hover .detalle-completo {
+    display: block;
+}
+/* Asegurar que los botones flotantes izquierdos también tengan posicionamiento */
+.floating-button.left {
+    left: 20px;
+    right: auto;
+}
+
+/* Para el botón de auditoría que está abajo */
+.floating-button.left[style*="bottom"] {
+    top: auto;
+    bottom: 20px;
+}

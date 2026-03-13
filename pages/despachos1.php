@@ -1,15 +1,3 @@
-<?php
-session_start();
-
-// Verificar si el usuario está logueado
-if (!isset($_SESSION['logueado']) || $_SESSION['logueado'] !== true) {
-    // No está logueado, redirigir al login
-    header('Location: http://9.234.192.192/login/');
-   exit;
-}
-
-// Si llegó aquí, el usuario está logueado
-?>*/
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -176,6 +164,12 @@ if (!isset($_SESSION['logueado']) || $_SESSION['logueado'] !== true) {
             </p>
         </div>
     </div>
+    <!-- Botón flotante para auditoría en la parte inferior izquierda -->
+    <button class="floating-button" onclick="window.location.href='auditoria.php'" 
+            style="position: fixed; bottom: 20px; left: 20px; background: linear-gradient(135deg, #2fadaf, #246ba5); z-index: 1000;">
+        <i class="fas fa-history"></i>
+        <span>Historial de Acciones</span>
+    </button>
 
     <!-- JavaScript específico de despachos1 -->
     <script src="../assets/js/despachos1.js"></script>

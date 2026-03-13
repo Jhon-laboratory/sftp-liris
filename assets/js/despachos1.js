@@ -4,7 +4,7 @@ let sftpTimeout = null;
 let filtroObservacionesActivo = false;
 let datosDetalleOriginal = [];
 
-// ========== FUNCIÓN PARA REGISTRAR AUDITORÍA ==========
+// ========== FUNCIÓN PARA REGISTRAR AUDITORÍA (VERSIÓN MEJORADA) ==========
 async function registrarAuditoria(accion, resultado, detalles = '') {
     // Solo registrar si hay datos actuales
     const numeroOrden = document.getElementById('numeroOrden')?.value || 
@@ -30,12 +30,42 @@ async function registrarAuditoria(accion, resultado, detalles = '') {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
-        const result = await response.json();
-        if (!result.success) {
-            console.error('Error registrando auditoría:', result.error);
+        
+        // Verificar si la respuesta es OK
+        if (!response.ok) {
+            if (response.status === 401) {
+                console.warn('⚠️ No autorizado para guardar auditoría - sesión no iniciada');
+                // Esto no es crítico, solo registramos en consola
+                return { success: false, error: 'No autorizado' };
+            }
+            throw new Error(`HTTP error ${response.status}`);
         }
+        
+        const textResponse = await response.text();
+        
+        // Intentar parsear JSON
+        try {
+            const result = JSON.parse(textResponse);
+            if (!result.success) {
+                console.error('Error registrando auditoría:', result.error);
+            } else {
+                console.log('✅ Auditoría registrada exitosamente');
+            }
+            return result;
+        } catch (jsonError) {
+            // Si la respuesta es HTML (error 401 o redirección)
+            if (textResponse.includes('<br') || textResponse.includes('<b>') || textResponse.includes('<!DOCTYPE')) {
+                console.warn('⚠️ Respuesta HTML recibida (probablemente sesión no iniciada)');
+                // No es crítico, continuamos con la operación
+                return { success: false, error: 'Respuesta HTML' };
+            }
+            console.error('❌ La respuesta NO es JSON válido:', textResponse.substring(0, 200));
+            return { success: false, error: 'Respuesta no válida' };
+        }
+        
     } catch (error) {
         console.error('Error registrando auditoría:', error);
+        return { success: false, error: error.message };
     }
 }
 
@@ -110,13 +140,14 @@ function obtenerDescripcionTipo(codigo) {
 }
 
 // ========== FUNCIONES AUXILIARES ==========
-function mostrarBotonesFlotantes(status) {
+function mostrarBotonesFlotantes(status, tipo) {
     const floatingActions = document.getElementById('floatingActions');
     const actionEnviarInterfaz = document.getElementById('actionEnviarInterfaz');
     
     floatingActions.style.display = 'flex';
     
-    if (status === '95') {
+    // 🔥 MODIFICACIÓN: Permitir envío para estado 95 O tipo 153
+    if (status === '95' || tipo === '153') {
         actionEnviarInterfaz.style.display = 'flex';
     } else {
         actionEnviarInterfaz.style.display = 'none';
@@ -219,14 +250,18 @@ function actualizarContadorObservaciones() {
 }
 
 // ========== DESCARGAR EXCEL ==========
-function descargarExcel() {
+async function descargarExcel() {
     if (!currentPedidoData || !currentPedidoData.detalle_pedido) {
         mostrarMensaje('error', 'No hay datos para exportar');
         return;
     }
 
     // Registrar inicio de descarga
-    registrarAuditoria('DESCARGA_EXCEL', 'INICIADO', 'Iniciando descarga de Excel');
+    try {
+        await registrarAuditoria('DESCARGA_EXCEL', 'INICIADO', 'Iniciando descarga de Excel');
+    } catch (auditError) {
+        console.warn('Error en auditoría (no crítico):', auditError);
+    }
 
     try {
         const btn = document.querySelector('#actionEnviarInterfaz .action-button');
@@ -277,13 +312,21 @@ function descargarExcel() {
         
         setTimeout(async () => {
             btn.innerHTML = originalHTML;
-            await registrarAuditoria('DESCARGA_EXCEL', 'EXITO', `Archivo LIRIS_${ordenKey}_${fecha}.xlsx generado`);
+            try {
+                await registrarAuditoria('DESCARGA_EXCEL', 'EXITO', `Archivo LIRIS_${ordenKey}_${fecha}.xlsx generado`);
+            } catch (auditError) {
+                console.warn('Error en auditoría (no crítico):', auditError);
+            }
             mostrarMensaje('success', 'Archivo Excel descargado correctamente');
         }, 100);
         
     } catch (error) {
         console.error('Error generando Excel:', error);
-        registrarAuditoria('DESCARGA_EXCEL', 'ERROR', `Error: ${error.message}`);
+        try {
+            await registrarAuditoria('DESCARGA_EXCEL', 'ERROR', `Error: ${error.message}`);
+        } catch (auditError) {
+            console.warn('Error en auditoría (no crítico):', auditError);
+        }
         mostrarMensaje('error', 'Error al generar archivo Excel');
         const btn = document.querySelector('#actionEnviarInterfaz .action-button');
         btn.innerHTML = '<i class="fas fa-file-excel"></i>';
@@ -291,14 +334,18 @@ function descargarExcel() {
 }
 
 // ========== DESCARGAR TXT ==========
-function descargarTXT() {
+async function descargarTXT() {
     if (!currentPedidoData || !currentPedidoData.detalle_pedido) {
         mostrarMensaje('error', 'No hay datos para exportar');
         return;
     }
 
     // Registrar inicio de descarga
-    registrarAuditoria('DESCARGA_TXT', 'INICIADO', 'Iniciando descarga de TXT');
+    try {
+        await registrarAuditoria('DESCARGA_TXT', 'INICIADO', 'Iniciando descarga de TXT');
+    } catch (auditError) {
+        console.warn('Error en auditoría (no crítico):', auditError);
+    }
 
     try {
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
@@ -309,7 +356,11 @@ function descargarTXT() {
         const externorderkey = currentPedidoData.informacion_pedido.externorderkey || '';
         
         if (!externorderkey) {
-            registrarAuditoria('DESCARGA_TXT', 'ERROR', 'No se encontró orden externa');
+            try {
+                await registrarAuditoria('DESCARGA_TXT', 'ERROR', 'No se encontró orden externa');
+            } catch (auditError) {
+                console.warn('Error en auditoría (no crítico):', auditError);
+            }
             mostrarMensaje('error', 'No se encontró orden externa');
             btn.innerHTML = originalHTML;
             return;
@@ -341,7 +392,11 @@ function descargarTXT() {
         });
         
         if (lines.length === 0) {
-            registrarAuditoria('DESCARGA_TXT', 'CANCELADO', 'No hay líneas con cantidad enviada > 0');
+            try {
+                await registrarAuditoria('DESCARGA_TXT', 'CANCELADO', 'No hay líneas con cantidad enviada > 0');
+            } catch (auditError) {
+                console.warn('Error en auditoría (no crítico):', auditError);
+            }
             mostrarMensaje('warning', 'No hay líneas con cantidad enviada > 0');
             btn.innerHTML = originalHTML;
             return;
@@ -361,14 +416,22 @@ function descargarTXT() {
             btn.innerHTML = originalHTML;
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            await registrarAuditoria('DESCARGA_TXT', 'EXITO', 
-                `Archivo ${externorderkey}.txt generado con ${lineasIncluidas} líneas (${lineasFiltradas} filtradas)`);
+            try {
+                await registrarAuditoria('DESCARGA_TXT', 'EXITO', 
+                    `Archivo ${externorderkey}.txt generado con ${lineasIncluidas} líneas (${lineasFiltradas} filtradas)`);
+            } catch (auditError) {
+                console.warn('Error en auditoría (no crítico):', auditError);
+            }
             mostrarMensaje('success', `Archivo ${externorderkey}.txt descargado`);
         }, 100);
         
     } catch (error) {
         console.error('Error generando TXT:', error);
-        registrarAuditoria('DESCARGA_TXT', 'ERROR', `Error: ${error.message}`);
+        try {
+            await registrarAuditoria('DESCARGA_TXT', 'ERROR', `Error: ${error.message}`);
+        } catch (auditError) {
+            console.warn('Error en auditoría (no crítico):', auditError);
+        }
         mostrarMensaje('error', 'Error al generar archivo TXT');
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
         btn.innerHTML = '<i class="fas fa-file-alt"></i>';
@@ -383,6 +446,7 @@ async function enviarDatosInterfaz() {
     }
 
     const status = currentPedidoData.informacion_pedido.status;
+    const tipo = currentPedidoData.informacion_pedido.type;
     const externorderkey = currentPedidoData.informacion_pedido.externorderkey || '';
     
     if (!externorderkey) {
@@ -390,10 +454,24 @@ async function enviarDatosInterfaz() {
         return;
     }
     
-    if (status !== '95') {
-        mostrarIndicadorSFTP('warning', `⚠️ Solo pedidos con estado 95. Actual: ${status}`);
-        await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', `Estado incorrecto: ${status}`);
+    // 🔥 MODIFICACIÓN: Validar estado 95 O tipo 153
+    if (status !== '95' && tipo !== '153') {
+        mostrarIndicadorSFTP('warning', `⚠️ Solo pedidos con estado 95 o tipo 153. Actual: estado ${status}, tipo ${tipo}`);
+        try {
+            await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', `Estado incorrecto: ${status}, Tipo: ${tipo}`);
+        } catch (auditError) {
+            console.warn('Error en auditoría (no crítico):', auditError);
+        }
         return;
+    }
+
+    // 🔥 MODIFICACIÓN: Determinar el tipo de envío para la ruta SFTP
+    let tipoEnvio = 'despacho'; // Por defecto
+    let tipoDescripcion = 'DESPACHO NORMAL';
+    
+    if (tipo === '153') {
+        tipoEnvio = 'devolucion';
+        tipoDescripcion = 'DEVOLUCIÓN PROVEEDOR';
     }
 
     let totalLineas = currentPedidoData.detalle_pedido.length;
@@ -413,6 +491,8 @@ async function enviarDatosInterfaz() {
         `¿ENVIAR PEDIDO A SFTP?\n\n` +
         `Orden: ${externorderkey}.txt\n` +
         `Estado: ${status}\n` +
+        `Tipo: ${tipo} - ${obtenerDescripcionTipo(tipo)}\n` +
+        `Carpeta destino: ${tipoEnvio === 'devolucion' ? 'Devolución Proveedor' : 'Despacho Normal'}\n` +
         `Líneas con envío: ${lineasConEnvio}\n` +
         `Líneas filtradas: ${lineasSinEnvio}\n\n` +
         `¿Continuar?`
@@ -420,12 +500,16 @@ async function enviarDatosInterfaz() {
     
     if (!confirmar) {
         mostrarIndicadorSFTP('info', 'Envío cancelado');
-        await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', 'Cancelado por el usuario');
+        try {
+            await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', 'Cancelado por el usuario');
+        } catch (auditError) {
+            console.warn('Error en auditoría (no crítico):', auditError);
+        }
         return;
     }
 
     try {
-        mostrarIndicadorSFTP('info', `📤 Generando archivo...`);
+        mostrarIndicadorSFTP('info', `📤 Generando archivo para ${tipoDescripcion}...`);
         
         const btn = document.querySelector('#actionEnviarInterfaz .action-button');
         const originalHTML = btn.innerHTML;
@@ -455,18 +539,23 @@ async function enviarDatosInterfaz() {
         if (lines.length === 0) {
             mostrarIndicadorSFTP('warning', '⚠️ No hay líneas con envío > 0');
             btn.innerHTML = originalHTML;
-            await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', 'No hay líneas con envío > 0');
+            try {
+                await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', 'No hay líneas con envío > 0');
+            } catch (auditError) {
+                console.warn('Error en auditoría (no crítico):', auditError);
+            }
             return;
         }
         
         const txtContent = lines.join('\r\n');
         const nombreArchivo = `${externorderkey}.txt`;
         
-        mostrarIndicadorSFTP('info', `🔗 Enviando a SFTP...`);
+        mostrarIndicadorSFTP('info', `🔗 Enviando a SFTP (${tipoDescripcion})...`);
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000);
         
+        // 🔥 MODIFICACIÓN: Enviar el tipo correcto al servidor
         const response = await fetch('../controller/enviarsftp.php', {
             method: 'POST',
             headers: { 
@@ -478,7 +567,7 @@ async function enviarDatosInterfaz() {
                 nombre_archivo: nombreArchivo,
                 orden: externorderkey,
                 lineas: lines.length,
-                tipo: 'despacho',
+                tipo: tipoEnvio, // 'despacho' o 'devolucion'
                 fecha: new Date().toISOString(),
                 usuario: 'sistema_despachos'
             }),
@@ -496,14 +585,22 @@ async function enviarDatosInterfaz() {
         
         if (resultado.success) {
             mostrarIndicadorSFTP('success', 
-                `✅ Archivo ${nombreArchivo} enviado a SFTP\n` +
+                `✅ Archivo ${nombreArchivo} enviado a SFTP (${tipoDescripcion})\n` +
                 `📊 ${lineasIncluidas} líneas incluidas`, 10000);
-            mostrarMensaje('success', `Envío SFTP exitoso`);
-            await registrarAuditoria('ENVIO_SFTP', 'EXITO', 
-                `Archivo ${nombreArchivo} enviado con ${lineasIncluidas} líneas`);
+            mostrarMensaje('success', `Envío SFTP exitoso - ${tipoDescripcion}`);
+            try {
+                await registrarAuditoria('ENVIO_SFTP', 'EXITO', 
+                    `Archivo ${nombreArchivo} enviado a ${tipoDescripcion} con ${lineasIncluidas} líneas`);
+            } catch (auditError) {
+                console.warn('Error en auditoría (no crítico):', auditError);
+            }
         } else {
             mostrarIndicadorSFTP('error', `❌ Error: ${resultado.error || 'Desconocido'}`);
-            await registrarAuditoria('ENVIO_SFTP', 'ERROR', resultado.error || 'Error desconocido');
+            try {
+                await registrarAuditoria('ENVIO_SFTP', 'ERROR', resultado.error || 'Error desconocido');
+            } catch (auditError) {
+                console.warn('Error en auditoría (no crítico):', auditError);
+            }
         }
         
     } catch (error) {
@@ -516,7 +613,11 @@ async function enviarDatosInterfaz() {
             mensaje = 'Timeout excedido';
         }
         mostrarIndicadorSFTP('error', `❌ ${mensaje}`);
-        await registrarAuditoria('ENVIO_SFTP', 'ERROR', `${mensaje}: ${error.message}`);
+        try {
+            await registrarAuditoria('ENVIO_SFTP', 'ERROR', `${mensaje}: ${error.message}`);
+        } catch (auditError) {
+            console.warn('Error en auditoría (no crítico):', auditError);
+        }
     }
 }
 
@@ -737,7 +838,10 @@ function mostrarResultados(informacion, detalles) {
     llenarInformacionPedido(informacion);
     const estadisticas = actualizarTotales(detalles);
     llenarTablaDetalles(detalles);
-    mostrarBotonesFlotantes(informacion.status);
+    
+    // 🔥 MODIFICACIÓN: Pasar el tipo a mostrarBotonesFlotantes
+    mostrarBotonesFlotantes(informacion.status, informacion.type);
+    
     document.getElementById("resultSection").style.display = 'block';
     
     actualizarContadorObservaciones();

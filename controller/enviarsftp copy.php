@@ -1,5 +1,6 @@
 <?php
-// enviarsftp.php - BASADO EN TU ARCHIVO QUE FUNCIONA
+// enviarsftp.php - CON RUTAS DIFERENTES PARA DESPACHO Y RECEPCIÓN
+// MODIFICADO: Agregada ruta para Devolución de Proveedor (tipo 153)
 require __DIR__ . '/../phpseclib/vendor/autoload.php';
 use phpseclib3\Net\SFTP;
 
@@ -33,24 +34,53 @@ try {
     $contenido = $input['contenido'];
     $nombre_archivo = $input['nombre_archivo'];
     $orden = $input['orden'] ?? 'desconocido';
+    $tipo = $input['tipo'] ?? 'despacho'; // 'despacho', 'recepcion', o 'devolucion'
+    $lineas = $input['lineas'] ?? 0;
     
-    // Configuración SFTP (TUS DATOS)
+    // Configuración SFTP base
     $host = '40.121.159.89';
     $port = 22;
     $user = 'lirisprd';
     $pass = 'lirisPROD01';
     
+    // 🔥 MODIFICACIÓN: Definir rutas según el tipo, incluyendo DEVOLUCIÓN
+    $rutas = [
+        'despacho' => [
+            'base' => '/RECIBE/TRANSACCIONES/TransferenciaPick',
+            'log_prefix' => 'DESPACHO'
+        ],
+        'recepcion' => [
+            'base' => '/RECIBE/TRANSACCIONES/ConfirmacionOC',
+            'log_prefix' => 'RECEPCION'
+        ],
+        'devolucion' => [ // 🔥 NUEVA RUTA PARA TIPO 153
+            'base' => '/RECIBE/TRANSACCIONES/DevolucionProveedor/Historico',
+            'log_prefix' => 'DEVOLUCION'
+        ]
+    ];
+    
+    // Validar que el tipo exista
+    if (!isset($rutas[$tipo])) {
+        $tipo = 'despacho'; // Por defecto
+    }
+    
+    $ruta_config = $rutas[$tipo];
+    $remote_dir = $ruta_config['base']; // 🔥 CORREGIDO: Eliminada referencia a subcarpeta
+    $log_prefix = $ruta_config['log_prefix'];
+    
     // Conectar
     $sftp = new SFTP($host, $port);
+    $sftp->setTimeout(30);
     
     if (!$sftp->login($user, $pass)) {
         throw new Exception("No se pudo conectar al SFTP");
     }
     
     // Crear carpeta si no existe
-    $remote_dir = '/RECIBE/TRANSACCIONES/ConfirmacionCG/Historico';
     if (!$sftp->file_exists($remote_dir)) {
-        $sftp->mkdir($remote_dir, 0755, true);
+        if (!$sftp->mkdir($remote_dir, 0755, true)) {
+            throw new Exception("No se pudo crear la carpeta: $remote_dir");
+        }
     }
     
     // Ruta completa del archivo
@@ -61,20 +91,54 @@ try {
         throw new Exception("Error al subir el archivo");
     }
     
+    // Verificar que se subió
+    if (!$sftp->file_exists($remote_file)) {
+        throw new Exception("No se pudo verificar la subida del archivo");
+    }
+    
+    $file_size = $sftp->filesize($remote_file);
+    
+    // Log de éxito (opcional)
+    $log_dir = __DIR__ . '/../logs';
+    if (!is_dir($log_dir)) {
+        mkdir($log_dir, 0755, true);
+    }
+    
+    file_put_contents($log_dir . '/sftp_success.log', 
+        date('Y-m-d H:i:s') . " | $log_prefix | $orden | $nombre_archivo | $lineas líneas | $file_size bytes\n", 
+        FILE_APPEND
+    );
+    
     // Respuesta exitosa
     echo json_encode([
         'success' => true,
         'message' => 'Archivo enviado correctamente',
         'archivo' => $nombre_archivo,
         'ruta' => $remote_file,
-        'orden' => $orden
+        'orden' => $orden,
+        'tipo' => $tipo,
+        'lineas' => $lineas,
+        'bytes' => $file_size
     ]);
     
 } catch (Exception $e) {
+    // Log de error
+    $log_dir = __DIR__ . '/../logs';
+    if (!is_dir($log_dir)) {
+        mkdir($log_dir, 0755, true);
+    }
+    
+    file_put_contents($log_dir . '/sftp_errors.log', 
+        date('Y-m-d H:i:s') . " | ERROR: " . $e->getMessage() . " | " . ($tipo ?? 'desconocido') . "\n", 
+        FILE_APPEND
+    );
+    
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => $e->getMessage()
+        'error' => $e->getMessage(),
+        'archivo' => $nombre_archivo ?? 'desconocido',
+        'tipo' => $tipo ?? 'desconocido'
     ]);
 }
 ?>

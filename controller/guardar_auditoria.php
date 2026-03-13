@@ -11,12 +11,12 @@ error_log("ID User: " . (isset($_SESSION['id_user']) ? $_SESSION['id_user'] : 'N
 require_once 'auditoria.php';
 
 // Verificar que hay sesión activa
-if (!isset($_SESSION['logueado']) || $_SESSION['logueado'] !== true) {
+/*if (!isset($_SESSION['logueado']) || $_SESSION['logueado'] !== true) {
     error_log("ERROR: No autorizado - sesión no iniciada");
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'No autorizado - Sesión no iniciada']);
     exit;
-}
+}*/
 
 // Obtener datos del POST
 $input = json_decode(file_get_contents('php://input'), true);

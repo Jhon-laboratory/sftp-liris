@@ -4,13 +4,70 @@ let sftpTimeout = null;
 let filtroObservacionesActivo = false;
 let datosDetalleOriginal = [];
 
+// ========== FUNCIÓN PARA REGISTRAR AUDITORÍA ==========
+async function registrarAuditoria(accion, resultado, detalles = '') {
+    console.log('📝 Intentando registrar auditoría:', { accion, resultado, detalles });
+    
+    const numeroOrden = document.getElementById('numeroOrden')?.value || 
+                        currentPedidoData?.informacion_pedido?.externorderkey || '';
+    
+    console.log('🔍 Número de orden:', numeroOrden);
+    
+    if (!numeroOrden) {
+        console.log('⚠️ No hay orden para auditar');
+        return;
+    }
+    
+    const data = {
+        accion: accion,
+        modulo: 'DESPACHO',
+        valor_buscado: numeroOrden,
+        numero_orden: numeroOrden,
+        resultado: resultado,
+        detalles: detalles
+    };
+    
+    console.log('📤 Enviando datos:', data);
+    
+    try {
+        const response = await fetch('../controller/guardar_auditoria.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        console.log('📥 Respuesta status:', response.status);
+        console.log('📥 Respuesta headers:', response.headers.get('content-type'));
+        
+        // Obtener el texto de la respuesta
+        const textResponse = await response.text();
+        console.log('📥 Respuesta texto COMPLETA:', textResponse);
+        
+        // Intentar parsear como JSON
+        try {
+            const result = JSON.parse(textResponse);
+            console.log('✅ JSON válido:', result);
+        } catch (jsonError) {
+            console.error('❌ ERROR: La respuesta NO es JSON');
+            console.error('Esto es lo que el servidor devolvió:');
+            console.error(textResponse);
+            
+            // Mostrar alerta con el error para que lo veas inmediatamente
+            alert('ERROR EN AUDITORÍA - Revisa la consola (F12) para ver el error PHP');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en fetch:', error);
+    }
+}
+
 // ========== FUNCIONES DE NAVEGACIÓN ==========
 function volverAlInicio() {
     window.location.href = '../index.php';
 }
 
 function irADespachos() {
-    window.location.href = 'despachos1.html';
+    window.location.href = 'despachos1.php';
 }
 
 // ========== INDICADOR SFTP ==========
@@ -282,6 +339,7 @@ async function enviarDatosInterfaz() {
     if (status !== '15') {
         const estadoTexto = currentRecepcionData.informacion_recepcion.status_texto || `Estado ${status}`;
         mostrarIndicadorSFTP('warning', `⚠️ Solo se pueden enviar recepciones con estado "Verificado y cerrado" (15). Estado actual: ${estadoTexto}`);
+        await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', `Estado incorrecto: ${status} - ${estadoTexto}`);
         return;
     }
 
@@ -320,6 +378,8 @@ async function enviarDatosInterfaz() {
         const confirmar = confirm(mensajeAdvertencia);
         if (!confirmar) {
             mostrarIndicadorSFTP('info', 'Envío cancelado por problemas en fechas');
+            await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', 
+                `Cancelado por problemas en fechas (${lineasConProblemasFecha.length} fechas inválidas)`);
             return;
         }
     }
@@ -336,6 +396,7 @@ async function enviarDatosInterfaz() {
     
     if (!confirmar) {
         mostrarIndicadorSFTP('info', 'Envío cancelado por el usuario');
+        await registrarAuditoria('ENVIO_SFTP', 'CANCELADO', 'Cancelado por el usuario');
         return;
     }
 
@@ -368,7 +429,6 @@ async function enviarDatosInterfaz() {
             lines.push(fields.join('|]'));
         });
         
-        // 🔴 CAMBIO IMPORTANTE: Usar CRLF (\r\n) para compatibilidad con Windows
         const txtContent = lines.join('\r\n');
         const nombreArchivo = `${externreceiptkey}.txt`;
         
@@ -393,7 +453,7 @@ async function enviarDatosInterfaz() {
                 usuario: 'sistema_recepciones',
                 fechas_validas: lineasConFechaValida,
                 fechas_problema: lineasConProblemasFecha.length,
-                formato_saltos: 'CRLF' // Informar que usamos CRLF
+                formato_saltos: 'CRLF'
             }),
             signal: controller.signal
         });
@@ -413,8 +473,11 @@ async function enviarDatosInterfaz() {
                 `📊 ${lineasConFechaValida}/${totalLineas} fechas válidas\n` +
                 `📝 Formato: CRLF (Windows)`, 10000);
             mostrarMensaje('success', `Envío SFTP exitoso (CRLF)`);
+            await registrarAuditoria('ENVIO_SFTP', 'EXITO', 
+                `Archivo ${nombreArchivo} enviado. Líneas: ${totalLineas}, Fechas válidas: ${lineasConFechaValida}`);
         } else {
             mostrarIndicadorSFTP('error', `❌ Error: ${resultado.error || 'Desconocido'}`);
+            await registrarAuditoria('ENVIO_SFTP', 'ERROR', resultado.error || 'Error desconocido');
         }
         
     } catch (error) {
@@ -427,6 +490,7 @@ async function enviarDatosInterfaz() {
             mensaje = 'Timeout excedido (60s)';
         }
         mostrarIndicadorSFTP('error', `❌ ${mensaje}`);
+        await registrarAuditoria('ENVIO_SFTP', 'ERROR', `${mensaje}: ${error.message}`);
     }
 }
 
@@ -436,6 +500,9 @@ function descargarExcel() {
         mostrarMensaje('error', 'No hay datos para exportar');
         return;
     }
+
+    // Registrar inicio de descarga
+    registrarAuditoria('DESCARGA_EXCEL', 'INICIADO', 'Iniciando descarga de Excel');
 
     try {
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item .action-button');
@@ -470,26 +537,30 @@ function descargarExcel() {
         
         const csvContent = csvData.map(row => 
             row.map(cell => `"${cell}"`).join(',')
-        ).join('\r\n'); // 🔴 También CRLF para Excel
+        ).join('\r\n');
         
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         
         link.href = url;
-        link.download = `LIRIS_REC_${currentRecepcionData.informacion_recepcion.receiptkey}_${new Date().toISOString().slice(0,10)}.csv`;
+        const nombreArchivo = `LIRIS_REC_${currentRecepcionData.informacion_recepcion.receiptkey}_${new Date().toISOString().slice(0,10)}.csv`;
+        link.download = nombreArchivo;
         document.body.appendChild(link);
         link.click();
         
-        setTimeout(() => {
+        setTimeout(async () => {
             btn.innerHTML = originalHTML;
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
+            await registrarAuditoria('DESCARGA_EXCEL', 'EXITO', 
+                `Archivo ${nombreArchivo} generado con ${csvData.length-1} líneas`);
             mostrarMensaje('success', 'Archivo Excel descargado');
         }, 100);
         
     } catch (error) {
         console.error('Error:', error);
+        registrarAuditoria('DESCARGA_EXCEL', 'ERROR', `Error: ${error.message}`);
         mostrarMensaje('error', 'Error al generar Excel');
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item .action-button');
         btn.innerHTML = '<i class="fas fa-file-excel"></i>';
@@ -503,6 +574,9 @@ function descargarTXT() {
         return;
     }
 
+    // Registrar inicio de descarga
+    registrarAuditoria('DESCARGA_TXT', 'INICIADO', 'Iniciando descarga de TXT');
+
     try {
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
         const originalHTML = btn.innerHTML;
@@ -514,6 +588,7 @@ function descargarTXT() {
         const fechaCreacionTXT = formatearFechaCreacionTXT(adddate);
         
         if (!externreceiptkey || externreceiptkey === 'N/A') {
+            registrarAuditoria('DESCARGA_TXT', 'ERROR', 'No se encontró número externo válido');
             mostrarMensaje('error', 'No se encontró número externo válido');
             btn.innerHTML = originalHTML;
             return;
@@ -534,7 +609,6 @@ function descargarTXT() {
             lines.push(fields.join('|]'));
         });
         
-        // 🔴 CAMBIO IMPORTANTE: Usar CRLF (\r\n) para compatibilidad con Windows
         const txtContent = lines.join('\r\n');
         const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
         const link = document.createElement('a');
@@ -545,15 +619,18 @@ function descargarTXT() {
         document.body.appendChild(link);
         link.click();
         
-        setTimeout(() => {
+        setTimeout(async () => {
             btn.innerHTML = originalHTML;
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
+            await registrarAuditoria('DESCARGA_TXT', 'EXITO', 
+                `Archivo ${externreceiptkey}.txt generado con ${lines.length} líneas`);
             mostrarMensaje('success', `Archivo ${externreceiptkey}.txt descargado (CRLF)`);
         }, 100);
         
     } catch (error) {
         console.error('Error generando TXT:', error);
+        registrarAuditoria('DESCARGA_TXT', 'ERROR', `Error: ${error.message}`);
         mostrarMensaje('error', 'Error al generar archivo TXT');
         const btn = document.querySelector('#actionEnviarInterfaz + .action-item + .action-item .action-button');
         btn.innerHTML = '<i class="fas fa-file-alt"></i>';
@@ -892,6 +969,65 @@ async function buscarRecepcion() {
         console.error('Error:', error);
         ocultarLoading();
         mostrarMensaje('error', `Error: ${error.message}`);
+    }
+}
+async function registrarAuditoria(accion, resultado, detalles = '') {
+    console.log('📝 Intentando registrar auditoría:', { accion, resultado, detalles });
+    
+    const numeroRecepcion = document.getElementById('numeroRecepcion')?.value || 
+                            currentRecepcionData?.informacion_recepcion?.externreceiptkey || '';
+    
+    console.log('🔍 Número de recepción:', numeroRecepcion);
+    
+    if (!numeroRecepcion) {
+        console.log('⚠️ No hay recepción para auditar');
+        return;
+    }
+    
+    const data = {
+        accion: accion,
+        modulo: 'RECEPCION',
+        valor_buscado: numeroRecepcion,
+        numero_orden: numeroRecepcion,
+        resultado: resultado,
+        detalles: detalles
+    };
+    
+    console.log('📤 Enviando datos:', data);
+    
+    try {
+        const response = await fetch('../controller/guardar_auditoria.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        console.log('📥 Respuesta status:', response.status);
+        
+        // Obtener el texto de la respuesta primero
+        const textResponse = await response.text();
+        console.log('📥 Respuesta texto:', textResponse.substring(0, 500)); // Primeros 500 caracteres
+        
+        // Intentar parsear como JSON
+        try {
+            const result = JSON.parse(textResponse);
+            console.log('📥 Respuesta JSON:', result);
+            
+            if (!result.success) {
+                console.error('❌ Error registrando auditoría:', result.error);
+            } else {
+                console.log('✅ Auditoría registrada exitosamente');
+            }
+        } catch (jsonError) {
+            console.error('❌ La respuesta NO es JSON válido:', jsonError);
+            console.error('Contenido de la respuesta:', textResponse);
+            
+            // Mostrar alerta con el error para que lo veas
+            alert('Error en auditoría - Revisa consola para detalles');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en fetch:', error);
     }
 }
 
